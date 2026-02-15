@@ -1,0 +1,12 @@
+## 🔄 Development Flow
+
+The system was built in iterative phases:
+
+1. Data Collection & Preprocessing
+2. Feature Engineering
+3. Model Training & Evaluation
+4. Explainability Integration
+5. Adversarial Robustness Testing
+6. Backend API Development
+7. Chrome Extension Integration
+8. Final System Testing & Optimization
