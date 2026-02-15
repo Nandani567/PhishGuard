@@ -2874,6 +2874,5047 @@ async def metrics():
 
 ---
 
+## 6.5 Backend Requirements Specification
+
+### 6.5.1 Backend Overview
+
+The backend service is built using FastAPI, a modern, high-performance Python web framework optimized for building APIs with automatic validation, documentation, and async support. The backend serves as the intelligence layer of the phishing detection system, hosting the trained machine learning models and providing RESTful endpoints for URL classification.
+
+#### Architecture Philosophy
+
+**Stateless Design**: The backend operates as a stateless service, enabling horizontal scaling and simplified deployment. All user-specific data (whitelist, settings) is stored client-side in the browser extension.
+
+**Microservice-Ready**: While deployed as a monolithic application for this academic project, the architecture is designed with clear separation of concerns to facilitate future microservice decomposition if needed.
+
+**API-First Approach**: The backend exposes a well-defined REST API that can be consumed by various clients (browser extensions, mobile apps, third-party services) without modification.
+
+#### Technology Stack
+
+| Component | Technology | Version | Purpose |
+|-----------|-----------|---------|---------|
+| **Web Framework** | FastAPI | 0.104+ | High-performance async API framework |
+| **ASGI Server** | Uvicorn | 0.24+ | Production-grade ASGI server |
+| **Data Validation** | Pydantic | 2.5+ | Request/response validation and serialization |
+| **ML Framework** | scikit-learn | 1.3+ | Model interface and preprocessing |
+| **Gradient Boosting** | XGBoost | 2.0+ | Primary classification algorithm |
+| **Numerical Computing** | NumPy | 1.26+ | Array operations and computations |
+| **Data Processing** | Pandas | 2.1+ | Data manipulation (training phase) |
+| **HTTP Client** | httpx | 0.25+ | Async HTTP requests for external APIs |
+| **Testing** | Pytest | 7.4+ | Unit and integration testing |
+| **Logging** | Python logging | stdlib | Structured logging |
+| **Environment Management** | python-dotenv | 1.0+ | Configuration management |
+| **Rate Limiting** | slowapi | 0.1.9+ | Request rate limiting |
+| **CORS Handling** | FastAPI CORS | built-in | Cross-origin resource sharing |
+| **Model Serialization** | joblib | 1.3+ | Efficient model persistence |
+
+#### Project Structure
+
+```
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                 # FastAPI application entry point
+│   ├── config.py               # Configuration settings
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── schemas.py          # Pydantic models for request/response
+│   │   └── ml_model.py         # ML model wrapper class
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes.py           # API route definitions
+│   │   └── dependencies.py     # Dependency injection
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── feature_extractor.py  # URL feature engineering
+│   │   ├── model_manager.py      # Model loading and inference
+│   │   └── exceptions.py         # Custom exception classes
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── validators.py       # Input validation utilities
+│   │   └── logger.py           # Logging configuration
+│   └── middleware/
+│       ├── __init__.py
+│       ├── rate_limiter.py     # Rate limiting middleware
+│       └── error_handler.py    # Global error handling
+├── models/
+│   ├── xgboost_v1.0.pkl        # Trained XGBoost model
+│   ├── scaler_v1.0.joblib      # Feature scaler
+│   └── metadata.json           # Model metadata
+├── tests/
+│   ├── __init__.py
+│   ├── test_api.py             # API endpoint tests
+│   ├── test_features.py        # Feature extraction tests
+│   └── test_model.py           # Model inference tests
+├── requirements.txt            # Python dependencies
+├── .env.example                # Environment variable template
+├── Dockerfile                  # Container definition
+├── docker-compose.yml          # Multi-container orchestration
+└── README.md                   # Backend documentation
+```
+
+---
+
+### 6.5.2 Functional Requirements
+
+#### Core API Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-B01** | URL Classification Endpoint | Critical | Provide POST /predict endpoint that accepts URL and returns phishing classification | Endpoint returns 200 with valid JSON containing prediction and confidence |
+| **FR-B02** | Request Validation | Critical | Validate incoming URL format and reject malformed requests | Invalid URLs return 400 with descriptive error message |
+| **FR-B03** | Feature Extraction | Critical | Extract 30+ features from URL string for model input | Features extracted successfully for all valid URLs |
+| **FR-B04** | Model Inference | Critical | Load ML model at startup and perform predictions on demand | Model loads successfully, predictions complete in <50ms |
+| **FR-B05** | Confidence Scoring | Critical | Return confidence score (0-1) with each prediction | Confidence score reflects model probability, properly calibrated |
+| **FR-B06** | Risk Categorization | High | Categorize URLs as high/medium/low risk based on confidence | Risk levels assigned according to defined thresholds |
+| **FR-B07** | Health Check Endpoint | High | Provide GET /health for service monitoring | Returns 200 with service status and model loaded indicator |
+| **FR-B08** | API Documentation | High | Auto-generate OpenAPI/Swagger documentation | Interactive docs available at /docs endpoint |
+| **FR-B09** | CORS Configuration | High | Allow cross-origin requests from browser extension | CORS headers properly configured for extension origin |
+| **FR-B10** | Rate Limiting | High | Limit requests to prevent abuse (100 req/min per IP) | Rate limiter returns 429 when threshold exceeded |
+| **FR-B11** | Request Logging | Medium | Log all requests with timestamp, URL hash, and result | Structured logs written for monitoring and debugging |
+| **FR-B12** | Error Response Standardization | Medium | Return consistent error format across all endpoints | All errors follow standard schema with error_code and message |
+| **FR-B13** | Batch Prediction | Low | Support batch URL classification in single request | Accept array of URLs and return array of predictions |
+| **FR-B14** | Model Versioning | Low | Support multiple model versions via query parameter | Endpoint accepts model_version parameter for A/B testing |
+| **FR-B15** | Feedback Collection | Low | Provide POST /feedback for user-reported false positives | Feedback stored for model improvement analysis |
+
+#### Feature Extraction Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-B16** | Lexical Feature Extraction | Critical | Extract character-based features (length, symbol counts, entropy) | All 15+ lexical features computed correctly |
+| **FR-B17** | Host-Based Feature Extraction | Critical | Extract domain features (TLD, subdomain count, domain length) | Domain parsing handles edge cases correctly |
+| **FR-B18** | URL Parsing | Critical | Parse URL into scheme, domain, path, query components | Parsing handles malformed URLs gracefully |
+| **FR-B19** | Special Character Detection | High | Identify suspicious characters (%, @, IP addresses) | Special patterns detected with 100% accuracy |
+| **FR-B20** | Feature Normalization | High | Scale features to model-compatible range | Features normalized using trained scaler |
+| **FR-B21** | Missing Feature Handling | Medium | Handle URLs where certain features cannot be extracted | Default values used for missing features |
+| **FR-B22** | Unicode Normalization | Medium | Normalize internationalized domain names (IDN) | Punycode conversion performed correctly |
+| **FR-B23** | Feature Vector Caching | Low | Cache computed features for identical URLs | Cache reduces redundant computation |
+
+#### Model Management Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-B24** | Model Loading at Startup | Critical | Load trained model into memory during application initialization | Model loaded successfully, startup time <10 seconds |
+| **FR-B25** | Model Persistence | Critical | Load model from persistent storage (.pkl files) | Model deserialization handles file I/O errors |
+| **FR-B26** | Prediction Pipeline | Critical | Apply feature scaling → model inference → post-processing | Pipeline produces consistent results |
+| **FR-B27** | Model Validation | High | Verify model integrity on load (checksum, version) | Invalid models rejected with clear error |
+| **FR-B28** | Graceful Model Failure | High | Handle model inference errors without crashing | Errors logged, 500 returned with generic message |
+| **FR-B29** | Model Hot-Reload | Low | Support reloading model without server restart | Model reloaded via admin endpoint |
+| **FR-B30** | Multiple Model Support | Low | Load and serve predictions from multiple model versions | Model routing based on version parameter |
+
+---
+
+### 6.5.3 API Specification
+
+#### Endpoint: POST /predict
+
+**Description**: Classify a URL as phishing or legitimate using the trained machine learning model.
+
+**URL**: `/api/v1/predict`
+
+**Method**: `POST`
+
+**Authentication**: None (public endpoint with rate limiting)
+
+**Rate Limit**: 100 requests per minute per IP address
+
+---
+
+#### Request Specification
+
+**Headers**:
+```http
+Content-Type: application/json
+Accept: application/json
+User-Agent: PhishingDetector-Extension/1.0
+```
+
+**Request Body Schema**:
+
+```json
+{
+  "url": "string (required, 1-2048 characters)",
+  "user_id": "string (optional, for analytics)",
+  "include_features": "boolean (optional, default: false)",
+  "model_version": "string (optional, default: 'v1.0')"
+}
+```
+
+**Field Descriptions**:
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `url` | string | Yes | Valid URL format, 1-2048 chars, HTTP/HTTPS only | The URL to classify |
+| `user_id` | string | No | Max 64 chars | Anonymous user identifier for analytics (not PII) |
+| `include_features` | boolean | No | Default: false | Return extracted features in response |
+| `model_version` | string | No | Must match available version | Specify model version for A/B testing |
+
+**Request Examples**:
+
+**Example 1: Basic Request**
+```json
+{
+  "url": "https://secure-login.paypal-verify.tk/signin"
+}
+```
+
+**Example 2: Request with Optional Fields**
+```json
+{
+  "url": "https://github.com/openai/gpt-3",
+  "user_id": "anonymous_user_12345",
+  "include_features": true,
+  "model_version": "v1.0"
+}
+```
+
+**Example 3: Suspicious URL**
+```json
+{
+  "url": "http://bit.ly.account-verify.suspicious-domain.xyz/update?user=victim"
+}
+```
+
+---
+
+#### Response Specification
+
+**Success Response (HTTP 200)**
+
+**Response Schema**:
+```json
+{
+  "status": "success",
+  "data": {
+    "url": "string",
+    "prediction": "string (phishing|legitimate)",
+    "confidence": "float (0.0-1.0)",
+    "risk_level": "string (safe|low|medium|high)",
+    "timestamp": "string (ISO 8601)",
+    "model_version": "string",
+    "features": "object (optional)"
+  },
+  "metadata": {
+    "request_id": "string",
+    "processing_time_ms": "integer"
+  }
+}
+```
+
+**Field Descriptions**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Always "success" for 200 responses |
+| `data.url` | string | The URL that was classified (may be normalized) |
+| `data.prediction` | string | Classification result: "phishing" or "legitimate" |
+| `data.confidence` | float | Model confidence score between 0.0 and 1.0 |
+| `data.risk_level` | string | Risk categorization: "safe", "low", "medium", or "high" |
+| `data.timestamp` | string | ISO 8601 timestamp of prediction |
+| `data.model_version` | string | Version of model used for prediction |
+| `data.features` | object | Feature vector (only if include_features=true) |
+| `metadata.request_id` | string | Unique identifier for this request |
+| `metadata.processing_time_ms` | integer | Server-side processing time in milliseconds |
+
+**Risk Level Thresholds**:
+- **safe**: prediction = "legitimate" (confidence < 0.60 for phishing class)
+- **low**: prediction = "phishing" AND confidence 0.60-0.69
+- **medium**: prediction = "phishing" AND confidence 0.70-0.79
+- **high**: prediction = "phishing" AND confidence ≥ 0.80
+
+**Response Examples**:
+
+**Example 1: Legitimate URL Detected**
+```json
+{
+  "status": "success",
+  "data": {
+    "url": "https://github.com/openai/gpt-3",
+    "prediction": "legitimate",
+    "confidence": 0.05,
+    "risk_level": "safe",
+    "timestamp": "2026-02-15T14:23:45.123Z",
+    "model_version": "v1.0"
+  },
+  "metadata": {
+    "request_id": "req_8f3a4b2c9d1e",
+    "processing_time_ms": 87
+  }
+}
+```
+
+**Example 2: Phishing URL Detected (High Risk)**
+```json
+{
+  "status": "success",
+  "data": {
+    "url": "https://secure-login.paypal-verify.tk/signin",
+    "prediction": "phishing",
+    "confidence": 0.94,
+    "risk_level": "high",
+    "timestamp": "2026-02-15T14:24:12.456Z",
+    "model_version": "v1.0"
+  },
+  "metadata": {
+    "request_id": "req_7e2d5a1f8c3b",
+    "processing_time_ms": 92
+  }
+}
+```
+
+**Example 3: With Feature Vector**
+```json
+{
+  "status": "success",
+  "data": {
+    "url": "http://account-verify.suspicious.xyz/login",
+    "prediction": "phishing",
+    "confidence": 0.87,
+    "risk_level": "high",
+    "timestamp": "2026-02-15T14:25:33.789Z",
+    "model_version": "v1.0",
+    "features": {
+      "url_length": 48,
+      "num_dots": 3,
+      "num_hyphens": 2,
+      "num_subdomains": 2,
+      "domain_length": 27,
+      "has_ip_address": 0,
+      "is_https": 0,
+      "suspicious_tld": 1,
+      "url_entropy": 4.12,
+      "digit_letter_ratio": 0.0,
+      "vowel_consonant_ratio": 0.58,
+      "path_length": 6,
+      "longest_subdomain": 15
+      // ... 20+ more features
+    }
+  },
+  "metadata": {
+    "request_id": "req_9a4c7b2e5d1f",
+    "processing_time_ms": 94
+  }
+}
+```
+
+**Example 4: Medium Risk (Suspicious but Lower Confidence)**
+```json
+{
+  "status": "success",
+  "data": {
+    "url": "https://login-secure.example-bank.com/verify",
+    "prediction": "phishing",
+    "confidence": 0.72,
+    "risk_level": "medium",
+    "timestamp": "2026-02-15T14:26:01.234Z",
+    "model_version": "v1.0"
+  },
+  "metadata": {
+    "request_id": "req_3f7a9c1b8e2d",
+    "processing_time_ms": 89
+  }
+}
+```
+
+---
+
+#### Error Response Specification
+
+All error responses follow a consistent schema for easier client-side handling.
+
+**Error Response Schema**:
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "string (ERROR_CODE_CONSTANT)",
+    "message": "string (human-readable error description)",
+    "details": "string or object (optional, additional context)",
+    "timestamp": "string (ISO 8601)"
+  },
+  "metadata": {
+    "request_id": "string"
+  }
+}
+```
+
+---
+
+#### Error Codes and Responses
+
+**1. HTTP 400 - Bad Request**
+
+**Scenario**: Invalid URL format
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "INVALID_URL_FORMAT",
+    "message": "The provided URL is not valid",
+    "details": "URL must include a valid scheme (http or https) and domain",
+    "timestamp": "2026-02-15T14:30:00.123Z"
+  },
+  "metadata": {
+    "request_id": "req_1a2b3c4d5e6f"
+  }
+}
+```
+
+**Scenario**: Missing required field
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "MISSING_REQUIRED_FIELD",
+    "message": "Required field 'url' is missing from request body",
+    "details": {
+      "field": "url",
+      "type": "string",
+      "required": true
+    },
+    "timestamp": "2026-02-15T14:30:15.456Z"
+  },
+  "metadata": {
+    "request_id": "req_2b3c4d5e6f7g"
+  }
+}
+```
+
+**Scenario**: URL too long
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "URL_TOO_LONG",
+    "message": "URL exceeds maximum allowed length",
+    "details": "Maximum URL length is 2048 characters, received 3521",
+    "timestamp": "2026-02-15T14:31:22.789Z"
+  },
+  "metadata": {
+    "request_id": "req_3c4d5e6f7g8h"
+  }
+}
+```
+
+**Scenario**: Unsupported URL scheme
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "UNSUPPORTED_SCHEME",
+    "message": "URL scheme not supported",
+    "details": "Only HTTP and HTTPS schemes are supported. Received: ftp",
+    "timestamp": "2026-02-15T14:32:45.012Z"
+  },
+  "metadata": {
+    "request_id": "req_4d5e6f7g8h9i"
+  }
+}
+```
+
+---
+
+**2. HTTP 422 - Unprocessable Entity**
+
+**Scenario**: Pydantic validation error
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": [
+      {
+        "loc": ["body", "url"],
+        "msg": "invalid or missing URL scheme",
+        "type": "value_error.url.scheme"
+      }
+    ],
+    "timestamp": "2026-02-15T14:33:10.345Z"
+  },
+  "metadata": {
+    "request_id": "req_5e6f7g8h9i0j"
+  }
+}
+```
+
+---
+
+**3. HTTP 429 - Too Many Requests**
+
+**Scenario**: Rate limit exceeded
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many requests. Please try again later",
+    "details": "Rate limit: 100 requests per minute. Retry after 45 seconds",
+    "timestamp": "2026-02-15T14:34:00.678Z"
+  },
+  "metadata": {
+    "request_id": "req_6f7g8h9i0j1k",
+    "retry_after": 45,
+    "limit": 100,
+    "window": "1 minute"
+  }
+}
+```
+
+---
+
+**4. HTTP 500 - Internal Server Error**
+
+**Scenario**: Model inference failure
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "MODEL_INFERENCE_ERROR",
+    "message": "An error occurred during URL classification",
+    "details": "The model encountered an unexpected error. Please try again",
+    "timestamp": "2026-02-15T14:35:22.901Z"
+  },
+  "metadata": {
+    "request_id": "req_7g8h9i0j1k2l"
+  }
+}
+```
+
+**Scenario**: Feature extraction failure
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "FEATURE_EXTRACTION_ERROR",
+    "message": "Failed to extract features from URL",
+    "details": "Unable to parse URL structure for feature computation",
+    "timestamp": "2026-02-15T14:36:45.234Z"
+  },
+  "metadata": {
+    "request_id": "req_8h9i0j1k2l3m"
+  }
+}
+```
+
+**Scenario**: Generic server error
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "INTERNAL_SERVER_ERROR",
+    "message": "An unexpected error occurred",
+    "details": "The server encountered an internal error. Our team has been notified",
+    "timestamp": "2026-02-15T14:37:30.567Z"
+  },
+  "metadata": {
+    "request_id": "req_9i0j1k2l3m4n"
+  }
+}
+```
+
+---
+
+**5. HTTP 503 - Service Unavailable**
+
+**Scenario**: Model not loaded
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "Service is temporarily unavailable",
+    "details": "ML model is not loaded. Please wait for service initialization",
+    "timestamp": "2026-02-15T14:38:15.890Z"
+  },
+  "metadata": {
+    "request_id": "req_0j1k2l3m4n5o",
+    "retry_after": 10
+  }
+}
+```
+
+---
+
+#### Additional Endpoints
+
+**Endpoint: GET /health**
+
+**Description**: Health check endpoint for monitoring service status
+
+**Response (HTTP 200)**:
+```json
+{
+  "status": "healthy",
+  "service": "phishing-detection-api",
+  "version": "1.0.0",
+  "model_loaded": true,
+  "model_version": "v1.0",
+  "uptime_seconds": 86400,
+  "timestamp": "2026-02-15T14:40:00.123Z"
+}
+```
+
+**Response (HTTP 503)** - When model not loaded:
+```json
+{
+  "status": "unhealthy",
+  "service": "phishing-detection-api",
+  "version": "1.0.0",
+  "model_loaded": false,
+  "error": "Model not initialized",
+  "timestamp": "2026-02-15T14:40:30.456Z"
+}
+```
+
+---
+
+**Endpoint: POST /feedback**
+
+**Description**: Collect user feedback on false positives/negatives
+
+**Request**:
+```json
+{
+  "url": "https://example.com",
+  "prediction": "phishing",
+  "confidence": 0.85,
+  "user_feedback": "false_positive",
+  "user_comment": "This is a legitimate site I use daily",
+  "request_id": "req_abc123"
+}
+```
+
+**Response (HTTP 200)**:
+```json
+{
+  "status": "success",
+  "message": "Feedback recorded. Thank you for helping improve our model",
+  "feedback_id": "fb_xyz789",
+  "timestamp": "2026-02-15T14:42:00.789Z"
+}
+```
+
+---
+
+### 6.5.4 Non-Functional Requirements
+
+#### Performance Requirements
+
+| ID | Requirement | Target Metric | Priority | Measurement Method |
+|----|-------------|---------------|----------|-------------------|
+| **NFR-B01** | API Response Time | <200ms (p95) | Critical | Prometheus metrics, request timing |
+| **NFR-B02** | Model Inference Latency | <50ms per prediction | Critical | Internal timing instrumentation |
+| **NFR-B03** | Feature Extraction Time | <30ms per URL | High | Profiling with cProfile |
+| **NFR-B04** | Concurrent Request Handling | 100+ simultaneous requests | High | Load testing with Locust/JMeter |
+| **NFR-B05** | Request Throughput | 50 requests/second sustained | Medium | Load testing over 1-hour duration |
+| **NFR-B06** | Cold Start Time | <10 seconds | Medium | Application startup measurement |
+| **NFR-B07** | Memory Usage | <512MB RAM under load | Medium | Memory profiling, Docker stats |
+| **NFR-B08** | CPU Utilization | <50% under typical load | Low | System monitoring (htop, Docker stats) |
+| **NFR-B09** | Model Loading Time | <5 seconds | Low | Startup logs timing |
+| **NFR-B10** | Database Query Time | <20ms (if database added) | Low | Query profiling |
+
+**Performance Benchmarking Strategy**:
+```python
+# Example performance test
+import time
+import statistics
+
+def benchmark_endpoint(url, num_requests=100):
+    latencies = []
+    for _ in range(num_requests):
+        start = time.time()
+        response = requests.post(API_URL, json={"url": url})
+        latency = (time.time() - start) * 1000  # ms
+        latencies.append(latency)
+    
+    return {
+        "mean": statistics.mean(latencies),
+        "median": statistics.median(latencies),
+        "p95": statistics.quantiles(latencies, n=20)[18],  # 95th percentile
+        "p99": statistics.quantiles(latencies, n=100)[98],
+        "min": min(latencies),
+        "max": max(latencies)
+    }
+```
+
+---
+
+#### Security Requirements
+
+| ID | Requirement | Implementation | Priority | Verification Method |
+|----|-------------|----------------|----------|---------------------|
+| **NFR-B11** | HTTPS Encryption | TLS 1.3 for all API traffic | Critical | SSL Labs scan, certificate verification |
+| **NFR-B12** | Input Sanitization | Validate and sanitize all inputs | Critical | Security testing, fuzzing |
+| **NFR-B13** | No PII Collection | Avoid logging full URLs or user data | Critical | Code review, log inspection |
+| **NFR-B14** | SQL Injection Prevention | Use parameterized queries (if DB used) | Critical | OWASP ZAP scanning |
+| **NFR-B15** | XSS Prevention | Escape output, set CSP headers | High | Penetration testing |
+| **NFR-B16** | CORS Configuration | Whitelist extension origins only | High | Browser DevTools verification |
+| **NFR-B17** | Rate Limiting | IP-based throttling | High | Load testing with rate limit bypass attempts |
+| **NFR-B18** | Authentication (Future) | JWT or API key authentication | Medium | N/A (not implemented in v1.0) |
+| **NFR-B19** | Secrets Management | Use environment variables for secrets | Medium | Code review |
+| **NFR-B20** | Dependency Scanning | Regular security audits of packages | Medium | pip-audit, safety check |
+| **NFR-B21** | DoS Protection | Request size limits, timeout configs | Medium | Stress testing |
+| **NFR-B22** | Error Message Security | No stack traces in production errors | Low | Manual testing |
+
+**Security Headers**:
+```python
+# Example FastAPI security headers middleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["chrome-extension://extension-id-here"],
+    allow_credentials=False,
+    allow_methods=["POST", "GET"],
+    allow_headers=["Content-Type"],
+)
+
+# Additional security headers
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    return response
+```
+
+---
+
+#### Reliability Requirements
+
+| ID | Requirement | Target | Priority | Implementation |
+|----|-------------|--------|----------|----------------|
+| **NFR-B23** | API Uptime | 99.5% availability | High | Health checks, auto-restart on failure |
+| **NFR-B24** | Graceful Error Handling | No unhandled exceptions | Critical | Try-catch blocks, global exception handler |
+| **NFR-B25** | Model Fallback | Use cached results if model fails | Medium | Implement fallback mechanism |
+| **NFR-B26** | Request Retry Logic | Client-side exponential backoff | Medium | Extension implementation |
+| **NFR-B27** | Logging Reliability | All errors logged with context | High | Structured logging to file/stdout |
+| **NFR-B28** | Graceful Degradation | Partial functionality on subsystem failure | Medium | Circuit breaker pattern |
+| **NFR-B29** | Data Validation | Reject invalid inputs early | Critical | Pydantic validators |
+| **NFR-B30** | Timeout Configuration | Set timeouts for all operations | High | FastAPI timeout middleware |
+
+**Error Handling Example**:
+```python
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+
+app = FastAPI()
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unhandled errors"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An unexpected error occurred",
+                "details": "Please contact support with request ID",
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            },
+            "metadata": {
+                "request_id": generate_request_id()
+            }
+        }
+    )
+```
+
+---
+
+#### Scalability Requirements
+
+| ID | Requirement | Target | Priority | Implementation Strategy |
+|----|-------------|--------|----------|------------------------|
+| **NFR-B31** | Horizontal Scalability | Support multiple instances behind load balancer | Medium | Stateless design, session-free |
+| **NFR-B32** | Stateless Architecture | No server-side session state | High | Store all state client-side |
+| **NFR-B33** | Model Replication | Each instance loads its own model | Medium | File-based model distribution |
+| **NFR-B34** | Connection Pooling | Efficient resource management | Low | Uvicorn worker configuration |
+| **NFR-B35** | Asynchronous Processing | Non-blocking I/O for API calls | High | FastAPI async/await |
+| **NFR-B36** | Caching Strategy | Cache frequent URL classifications | Low | Redis cache (future enhancement) |
+| **NFR-B37** | Database Scaling | Use connection pooling if DB added | Low | SQLAlchemy pooling |
+| **NFR-B38** | Auto-scaling | Scale instances based on load | Low | Kubernetes HPA (future) |
+
+**Deployment Scaling Architecture**:
+```
+                    ┌─────────────────┐
+                    │  Load Balancer  │
+                    │   (NGINX/ALB)   │
+                    └────────┬────────┘
+                             │
+             ┌───────────────┼───────────────┐
+             ▼               ▼               ▼
+    ┌────────────┐  ┌────────────┐  ┌────────────┐
+    │  Backend   │  │  Backend   │  │  Backend   │
+    │ Instance 1 │  │ Instance 2 │  │ Instance N │
+    └────────────┘  └────────────┘  └────────────┘
+         │               │               │
+         └───────────────┴───────────────┘
+                         │
+                    ┌────▼────┐
+                    │ Shared  │
+                    │ Storage │
+                    │ (Model) │
+                    └─────────┘
+```
+
+---
+
+#### Maintainability Requirements
+
+| ID | Requirement | Standard | Priority | Verification |
+|----|-------------|----------|----------|--------------|
+| **NFR-B39** | Code Documentation | Docstrings for all functions/classes | High | Code review, documentation coverage |
+| **NFR-B40** | API Documentation | Auto-generated Swagger/OpenAPI docs | High | /docs endpoint functional |
+| **NFR-B41** | Code Style | Follow PEP 8 guidelines | Medium | Linting with flake8/black |
+| **NFR-B42** | Type Hints | Use Python type annotations | Medium | mypy static type checking |
+| **NFR-B43** | Unit Test Coverage | ≥80% code coverage | Medium | pytest-cov measurement |
+| **NFR-B44** | Logging Standards | Structured JSON logging | Medium | Log format validation |
+| **NFR-B45** | Configuration Management | Environment-based config | High | .env file usage |
+| **NFR-B46** | Version Control | Git with meaningful commit messages | Critical | Repository inspection |
+| **NFR-B47** | Dependency Management | requirements.txt with pinned versions | High | File review |
+| **NFR-B48** | README Documentation | Comprehensive setup instructions | Medium | Documentation completeness |
+
+**Code Quality Standards**:
+```python
+# Example well-documented function
+from typing import Dict, List, Optional
+import numpy as np
+
+def extract_url_features(
+    url: str,
+    include_optional: bool = False
+) -> Dict[str, float]:
+    """
+    Extract numerical features from a URL string for ML model input.
+    
+    This function parses the URL and computes lexical, host-based, and
+    statistical features used by the phishing detection model.
+    
+    Args:
+        url: The URL string to analyze (must be valid HTTP/HTTPS URL)
+        include_optional: Whether to include computationally expensive
+            features like WHOIS lookup (default: False)
+    
+    Returns:
+        Dictionary mapping feature names to numerical values. Returns
+        30+ features including url_length, num_dots, entropy, etc.
+    
+    Raises:
+        ValueError: If URL format is invalid
+        URLParsingError: If URL cannot be parsed into components
+    
+    Example:
+        >>> features = extract_url_features("https://example.com/path")
+        >>> features['url_length']
+        26
+        >>> features['num_dots']
+        1
+    
+    Note:
+        Features are not normalized. Use the trained scaler before
+        passing to the model.
+    """
+    # Implementation...
+```
+
+---
+
+### 6.5.5 Deployment Considerations
+
+#### Development Environment Setup
+
+**Prerequisites**:
+- Python 3.10 or higher
+- pip package manager
+- Virtual environment (venv or conda)
+- Git for version control
+
+**Installation Steps**:
+
+```bash
+# 1. Clone repository
+git clone https://github.com/your-repo/phishing-detection-backend.git
+cd phishing-detection-backend
+
+# 2. Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# 5. Download or train ML model
+python scripts/train_model.py  # Or download pre-trained model
+mv model.pkl models/xgboost_v1.0.pkl
+
+# 6. Run development server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Environment Variables** (`.env` file):
+```bash
+# Application Settings
+APP_NAME=PhishingDetectionAPI
+APP_VERSION=1.0.0
+DEBUG_MODE=True
+LOG_LEVEL=INFO
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+WORKERS=4
+RELOAD=True
+
+# Model Configuration
+MODEL_PATH=models/xgboost_v1.0.pkl
+SCALER_PATH=models/scaler_v1.0.joblib
+MODEL_VERSION=v1.0
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=60  # seconds
+
+# CORS Configuration
+CORS_ORIGINS=["chrome-extension://your-extension-id"]
+
+# Security
+SECRET_KEY=your-secret-key-here
+API_KEY_ENABLED=False
+
+# Logging
+LOG_FILE=logs/app.log
+LOG_MAX_SIZE=10485760  # 10MB
+LOG_BACKUP_COUNT=5
+```
+
+---
+
+#### Local Testing Environment
+
+**Running Tests**:
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage report
+pytest tests/ --cov=app --cov-report=html
+
+# Run specific test file
+pytest tests/test_api.py -v
+
+# Run with timing information
+pytest tests/ --durations=10
+```
+
+**Manual API Testing with cURL**:
+```bash
+# Test /predict endpoint
+curl -X POST http://localhost:8000/api/v1/predict \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://suspicious-site.tk/login"}'
+
+# Test /health endpoint
+curl http://localhost:8000/health
+
+# Test with verbose output
+curl -v -X POST http://localhost:8000/api/v1/predict \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://github.com", "include_features": true}'
+```
+
+---
+
+#### Production Deployment Options
+
+**Option 1: Docker Containerization (Recommended)**
+
+**Dockerfile**:
+```dockerfile
+FROM python:3.10-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app/ app/
+COPY models/ models/
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Run application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+```
+
+**docker-compose.yml** (for local multi-container setup):
+```yaml
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: phishing-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG_MODE=False
+      - LOG_LEVEL=INFO
+      - WORKERS=4
+    volumes:
+      - ./models:/app/models:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Add Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: phishing-cache
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+```
+
+**Build and Run**:
+```bash
+# Build Docker image
+docker build -t phishing-detection-api:v1.0 .
+
+# Run container
+docker run -d \
+  --name phishing-api \
+  -p 8000:8000 \
+  -v $(pwd)/models:/app/models:ro \
+  phishing-detection-api:v1.0
+
+# Or use docker-compose
+docker-compose up -d
+```
+
+---
+
+**Option 2: Cloud Platform Deployment**
+
+**AWS Elastic Beanstalk**:
+```yaml
+# .ebextensions/01_app.config
+option_settings:
+  aws:elasticbeanstalk:application:environment:
+    PYTHONPATH: "/var/app/current:$PYTHONPATH"
+  aws:elasticbeanstalk:container:python:
+    WSGIPath: app.main:app
+  aws:autoscaling:launchconfiguration:
+    InstanceType: t3.small
+    RootVolumeSize: 20
+```
+
+**Google Cloud Run** (serverless):
+```bash
+# Deploy to Cloud Run
+gcloud run deploy phishing-api \
+  --source . \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 512Mi \
+  --cpu 1
+```
+
+**Heroku**:
+```bash
+# Procfile
+web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+# Deploy
+heroku create phishing-detection-api
+git push heroku main
+```
+
+---
+
+#### Monitoring and Observability
+
+**Logging Configuration**:
+```python
+# app/utils/logger.py
+import logging
+import sys
+from logging.handlers import RotatingFileHandler
+
+def setup_logger():
+    logger = logging.getLogger("phishing-api")
+    logger.setLevel(logging.INFO)
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    
+    # File handler with rotation
+    file_handler = RotatingFileHandler(
+        "logs/app.log",
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    file_handler.setLevel(logging.INFO)
+    
+    # JSON formatter for structured logging
+    formatter = logging.Formatter(
+        '{"timestamp": "%(asctime)s", "level": "%(levelname)s", '
+        '"logger": "%(name)s", "message": "%(message)s"}'
+    )
+    
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+    
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    
+    return logger
+```
+
+**Health Monitoring**:
+- Implement `/health` endpoint for liveness probes
+- Use `/metrics` endpoint for Prometheus metrics (optional)
+- Set up alerting for error rates, latency spikes
+- Monitor resource usage (CPU, memory, disk)
+
+---
+
+#### CI/CD Pipeline
+
+**GitHub Actions Workflow** (`.github/workflows/ci.yml`):
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      
+      - name: Run tests
+        run: pytest tests/ --cov=app --cov-report=xml
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+  
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 app/ --max-line-length=100
+  
+  deploy:
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to production
+        run: |
+          # Add deployment script here
+          echo "Deploying to production..."
+```
+
+---
+
+#### Backup and Recovery
+
+**Model Versioning**:
+- Store multiple model versions with timestamps
+- Maintain model metadata (accuracy, training date)
+- Implement rollback mechanism for model updates
+
+**Data Backup**:
+- Regular backups of feedback data (if stored)
+- Configuration backups
+- Log archival and retention policy
+
+---
+
+#### Performance Optimization
+
+**Caching Strategies**:
+```python
+# Example: In-memory LRU cache for predictions
+from functools import lru_cache
+
+@lru_cache(maxsize=1000)
+def get_cached_prediction(url_hash: str):
+    """Cache recent predictions to reduce redundant computations"""
+    # This would be implemented in the actual service
+    pass
+```
+
+**Load Balancing**:
+- Use NGINX or HAProxy for multiple backend instances
+- Implement round-robin or least-connections algorithm
+- Health checks for automatic failover
+
+**Database Optimization** (if database added):
+- Index frequently queried fields
+- Use connection pooling
+- Implement read replicas for scalability
+
+### 6.6 System Overview
+
+The ML-Based Phishing URL Detection System is designed as a modular, scalable architecture that separates concerns across distinct operational layers. The system follows a client-server model where the browser extension acts as a lightweight client, performing minimal processing while delegating complex machine learning inference to a centralized backend service.
+
+#### 6.6.1 Operational Flow
+
+The system operates through the following sequential workflow:
+
+1. **URL Capture**: When a user attempts to navigate to a URL, the Chrome extension intercepts the navigation event before the page loads
+2. **Preprocessing**: The extension performs basic URL normalization and checks local cache for recent classifications
+3. **API Request**: If not cached, the extension sends an HTTPS POST request to the FastAPI backend containing the URL
+4. **Feature Extraction**: The backend parses the URL and extracts 30+ features including lexical, structural, and host-based characteristics
+5. **ML Inference**: The extracted features are passed to the trained machine learning model (XGBoost/Random Forest) for classification
+6. **Confidence Scoring**: The model returns a prediction (phishing/legitimate) with an associated confidence score (0-100%)
+7. **Response Formatting**: The API packages the prediction, confidence, risk level, and metadata into a JSON response
+8. **Client-Side Decision**: The extension interprets the response and determines the appropriate user intervention
+9. **User Notification**: Based on risk level, the system either blocks access, displays a warning, or allows seamless navigation
+10. **Feedback Loop**: User actions (proceed/block/report) are optionally logged for model improvement
+
+#### 6.6.2 Design Principles
+
+The architecture adheres to the following design principles:
+
+- **Separation of Concerns**: Clear boundaries between presentation (extension), business logic (API), and ML inference (model layer)
+- **Statelessness**: API endpoints are stateless, enabling horizontal scalability
+- **Privacy-by-Design**: Minimal data collection with no user tracking or PII storage
+- **Performance Optimization**: Caching, async operations, and efficient feature extraction minimize latency
+- **Graceful Degradation**: System functions in reduced capacity if backend is unavailable
+- **Modularity**: Components can be independently updated, tested, and deployed
+- **Security-First**: All communications encrypted, input validation at every layer
+
+#### 6.6.3 Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          USER INTERACTION                           │
+│                    (Clicks link / Enters URL)                       │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      CHROME BROWSER LAYER                           │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │  Navigation Event Triggered                                   │  │
+│  │  • webNavigation.onBeforeNavigate                             │  │
+│  │  • webRequest.onBeforeRequest                                 │  │
+│  └───────────────────────────┬───────────────────────────────────┘  │
+└────────────────────────────────┼────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   CHROME EXTENSION (Frontend)                       │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │  STEP 1: URL Extraction & Normalization                      │  │
+│  │  • Parse URL from navigation event                            │  │
+│  │  • Remove fragments, normalize encoding                       │  │
+│  │  • Extract domain, protocol, path                             │  │
+│  └───────────────────────────┬───────────────────────────────────┘  │
+│                               │                                      │
+│  ┌───────────────────────────▼───────────────────────────────────┐  │
+│  │  STEP 2: Local Cache Check                                    │  │
+│  │  • Query chrome.storage.local                                 │  │
+│  │  • Key: hashed URL, Value: {classification, timestamp}        │  │
+│  │  • Cache TTL: 24 hours                                        │  │
+│  └───────────────────────────┬───────────────────────────────────┘  │
+│                               │                                      │
+│                    ┌──────────┴───────────┐                          │
+│                    │                      │                          │
+│              Cache Hit?              Cache Miss?                     │
+│                    │                      │                          │
+│        ┌───────────▼──────────┐   ┌──────▼──────────────┐           │
+│        │  Use Cached Result   │   │  Prepare API Request│           │
+│        └───────────┬──────────┘   └──────┬──────────────┘           │
+│                    │                      │                          │
+│                    │              ┌───────▼───────────────────────┐  │
+│                    │              │ STEP 3: HTTP Request          │  │
+│                    │              │ POST /predict                 │  │
+│                    │              │ Headers: Content-Type, API-Key│  │
+│                    │              │ Body: {"url": "..."}          │  │
+│                    │              └───────┬───────────────────────┘  │
+└────────────────────┼──────────────────────┼──────────────────────────┘
+                     │                      │
+                     │                      │ HTTPS (TLS 1.3)
+                     │                      ▼
+                     │      ┌─────────────────────────────────────────┐
+                     │      │      NETWORK LAYER (Internet)           │
+                     │      │  • Encrypted communication              │
+                     │      │  • DNS resolution                       │
+                     │      │  • Load balancing (if deployed)         │
+                     │      └─────────────┬───────────────────────────┘
+                     │                    │
+                     │                    ▼
+                     │      ┌─────────────────────────────────────────┐
+                     │      │      FASTAPI BACKEND SERVER             │
+                     │      │  ┌────────────────────────────────────┐ │
+                     │      │  │  STEP 4: Request Handling          │ │
+                     │      │  │  • Validate request format         │ │
+                     │      │  │  • Rate limiting check             │ │
+                     │      │  │  • Authentication (if enabled)     │ │
+                     │      │  │  • Logging & monitoring            │ │
+                     │      │  └────────────┬───────────────────────┘ │
+                     │      │               │                          │
+                     │      │  ┌────────────▼───────────────────────┐ │
+                     │      │  │  STEP 5: Feature Extraction        │ │
+                     │      │  │  • Parse URL structure             │ │
+                     │      │  │  • Compute lexical features        │ │
+                     │      │  │  • Extract host-based features     │ │
+                     │      │  │  • Generate feature vector         │ │
+                     │      │  │  Output: X = [f1, f2, ..., f30]    │ │
+                     │      │  └────────────┬───────────────────────┘ │
+                     │      │               │                          │
+                     │      │  ┌────────────▼───────────────────────┐ │
+                     │      │  │  STEP 6: ML Model Inference        │ │
+                     │      │  │  • Load model from memory          │ │
+                     │      │  │  • model.predict(X)                │ │
+                     │      │  │  • model.predict_proba(X)          │ │
+                     │      │  │  Output: class, probability        │ │
+                     │      │  └────────────┬───────────────────────┘ │
+                     │      │               │                          │
+                     │      │  ┌────────────▼───────────────────────┐ │
+                     │      │  │  STEP 7: Post-Processing           │ │
+                     │      │  │  • Map class to label              │ │
+                     │      │  │  • Calculate confidence score      │ │
+                     │      │  │  • Determine risk level            │ │
+                     │      │  │  • Format JSON response            │ │
+                     │      │  └────────────┬───────────────────────┘ │
+                     │      └────────────────┼────────────────────────┘
+                     │                       │
+                     │                       │ HTTP 200 Response
+                     │      ┌────────────────▼────────────────────────┐
+                     │      │  Response: {                            │
+                     │      │    "prediction": "phishing",            │
+                     │      │    "confidence": 0.89,                  │
+                     │      │    "risk_level": "high"                 │
+                     │      │  }                                      │
+                     │      └────────────────┬────────────────────────┘
+                     │                       │
+┌────────────────────┼───────────────────────┼──────────────────────────┐
+│                    │                       │                          │
+│  ┌─────────────────▼───────────────────────▼────────────────────────┐│
+│  │  STEP 8: Response Processing & Decision Logic                    ││
+│  │  • Parse API response                                             ││
+│  │  • Update local cache                                             ││
+│  │  • Apply decision rules:                                          ││
+│  │    - confidence > 80% → Block page                                ││
+│  │    - confidence 60-80% → Show warning banner                      ││
+│  │    - confidence < 60% → Allow with silent logging                 ││
+│  └───────────────────────────┬───────────────────────────────────────┘│
+│                               │                                        │
+│  ┌────────────────────────────▼──────────────────────────────────────┐│
+│  │  STEP 9: User Interface Rendering                                 ││
+│  │  High Risk: Display blocking page with warning                    ││
+│  │  Medium Risk: Inject warning banner at page top                   ││
+│  │  Low Risk: Allow navigation, log silently                         ││
+│  └───────────────────────────┬───────────────────────────────────────┘│
+└────────────────────────────────┼────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                          USER NOTIFICATION                          │
+│  • Blocking page: "Phishing Threat Detected"                        │
+│  • Warning banner: "This site may be suspicious"                    │
+│  • Seamless navigation: (No interruption)                           │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      USER DECISION                                  │
+│  • Go back to safety                                                │
+│  • Proceed anyway (with consent)                                    │
+│  • Add to whitelist                                                 │
+│  • Report false positive                                            │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6.7 Component Breakdown
+
+This section provides an in-depth analysis of each system component, detailing their responsibilities, interfaces, and interdependencies.
+
+### 6.7.1 Machine Learning Layer
+
+The Machine Learning Layer is the core intelligence component responsible for distinguishing phishing URLs from legitimate ones through supervised learning techniques.
+
+#### 6.7.1.1 Responsibilities
+
+1. **Feature Engineering**
+   - Extract meaningful patterns from raw URL strings
+   - Transform unstructured URL data into structured numerical features
+   - Implement domain-specific feature extraction logic
+   - Handle missing or malformed URL components
+
+2. **Model Training**
+   - Train classification models on labeled phishing/legitimate datasets
+   - Perform hyperparameter optimization for model tuning
+   - Implement cross-validation for robust performance estimation
+   - Handle class imbalance through sampling or weighting techniques
+
+3. **Model Evaluation**
+   - Compute standard classification metrics (accuracy, precision, recall, F1)
+   - Generate confusion matrices and ROC curves
+   - Perform error analysis on misclassified samples
+   - Validate model generalization on holdout test sets
+
+4. **Model Serialization**
+   - Save trained models in production-ready formats
+   - Version control for model artifacts
+   - Compress models for efficient storage and loading
+   - Document model metadata (features, performance, training date)
+
+5. **Inference**
+   - Load pre-trained models efficiently at runtime
+   - Process feature vectors and generate predictions
+   - Compute prediction confidence scores
+   - Optimize inference speed for real-time requirements
+
+#### 6.7.1.2 Inputs
+
+| Input Type | Source | Format | Description |
+|------------|--------|--------|-------------|
+| Training Data | PhishTank, OpenPhish, Alexa | CSV/JSON | Labeled URL dataset with binary labels |
+| URL String | Backend API | String | Raw URL to be classified |
+| Feature Vector | Feature Extractor | NumPy Array | Numerical representation of URL (shape: [1, n_features]) |
+| Model Parameters | Training Script | Dict/Config | Hyperparameters for model training |
+| Historical Data | Feedback System | JSON | User-reported false positives/negatives |
+
+#### 6.7.1.3 Outputs
+
+| Output Type | Destination | Format | Description |
+|-------------|-------------|--------|-------------|
+| Trained Model | Model Repository | .pkl/.joblib | Serialized XGBoost/Random Forest model |
+| Prediction | Backend API | Integer | Binary classification (0=legitimate, 1=phishing) |
+| Confidence Score | Backend API | Float | Probability estimate [0.0, 1.0] |
+| Feature Importance | Documentation | DataFrame | Ranking of features by predictive power |
+| Evaluation Metrics | Project Report | JSON/Dict | Performance statistics on test set |
+| Feature Vector | Model Inference | NumPy Array | Extracted features from input URL |
+
+#### 6.7.1.4 Dependencies
+
+**Python Libraries:**
+- `scikit-learn` (>=1.3.0): Core ML algorithms, preprocessing, metrics
+- `xgboost` (>=2.0.0): Gradient boosting implementation
+- `pandas` (>=2.0.0): Data manipulation and feature engineering
+- `numpy` (>=1.24.0): Numerical computing and array operations
+- `joblib` (>=1.3.0): Efficient model serialization
+- `imbalanced-learn` (optional): SMOTE for class balancing
+
+**Data Sources:**
+- PhishTank API for phishing URLs
+- Alexa Top 1M for legitimate URLs
+- UCI ML Repository datasets
+
+**Hardware Requirements:**
+- Training: Multi-core CPU or GPU for faster training
+- Inference: Minimal CPU (single-core sufficient)
+- Memory: 4-8 GB RAM for training, <512 MB for inference
+
+#### 6.7.1.5 Feature Extraction Details
+
+The ML layer extracts the following feature categories:
+
+**Lexical Features (String-based):**
+```python
+features = {
+    'url_length': len(url),
+    'num_dots': url.count('.'),
+    'num_hyphens': url.count('-'),
+    'num_underscores': url.count('_'),
+    'num_slashes': url.count('/'),
+    'num_question_marks': url.count('?'),
+    'num_equals': url.count('='),
+    'num_at_symbols': url.count('@'),
+    'num_ampersands': url.count('&'),
+    'num_digits': sum(c.isdigit() for c in url),
+    'num_special_chars': sum(c in string.punctuation for c in url),
+}
+```
+
+**Host-based Features:**
+```python
+features = {
+    'hostname_length': len(hostname),
+    'num_subdomains': hostname.count('.'),
+    'has_ip_address': bool(re.match(r'\d+\.\d+\.\d+\.\d+', hostname)),
+    'suspicious_tld': tld in ['.xyz', '.tk', '.ml', '.ga', '.cf'],
+    'port_present': bool(parsed_url.port),
+}
+```
+
+**Structural Features:**
+```python
+features = {
+    'path_length': len(parsed_url.path),
+    'query_length': len(parsed_url.query),
+    'fragment_length': len(parsed_url.fragment),
+    'has_https': parsed_url.scheme == 'https',
+    'entropy': calculate_shannon_entropy(url),
+}
+```
+
+#### 6.7.1.6 Model Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ML Training Pipeline                     │
+│                                                             │
+│  ┌─────────────┐      ┌──────────────┐     ┌────────────┐ │
+│  │   Raw       │      │  Feature     │     │  Labeled   │ │
+│  │   URLs      │─────▶│  Extraction  │────▶│  Feature   │ │
+│  │  (100K)     │      │              │     │  Vectors   │ │
+│  └─────────────┘      └──────────────┘     └────────────┘ │
+│                                                   │         │
+│                                                   ▼         │
+│                            ┌─────────────────────────────┐ │
+│                            │  Train/Test Split (70/30)  │ │
+│                            └────────────┬────────────────┘ │
+│                                         │                  │
+│                    ┌────────────────────┴───────┐          │
+│                    ▼                            ▼          │
+│           ┌─────────────────┐         ┌──────────────────┐│
+│           │  Training Set   │         │   Test Set       ││
+│           │    (70K)        │         │   (30K)          ││
+│           └────────┬────────┘         └────────┬─────────┘│
+│                    │                            │          │
+│                    ▼                            │          │
+│    ┌───────────────────────────────┐           │          │
+│    │  Model Training & Tuning      │           │          │
+│    │  • XGBoost                    │           │          │
+│    │  • Random Forest              │           │          │
+│    │  • 5-Fold Cross-Validation    │           │          │
+│    │  • Grid Search                │           │          │
+│    └───────────────┬───────────────┘           │          │
+│                    │                            │          │
+│                    ▼                            │          │
+│           ┌─────────────────┐                  │          │
+│           │  Trained Model  │                  │          │
+│           │   (Best Params) │                  │          │
+│           └────────┬────────┘                  │          │
+│                    │                            │          │
+│                    └────────────────────────────┘          │
+│                                 │                          │
+│                                 ▼                          │
+│                    ┌─────────────────────────┐            │
+│                    │  Model Evaluation       │            │
+│                    │  • Accuracy: 96.3%      │            │
+│                    │  • Precision: 94.8%     │            │
+│                    │  • Recall: 97.1%        │            │
+│                    │  • F1-Score: 95.9%      │            │
+│                    │  • ROC-AUC: 0.982       │            │
+│                    └─────────────────────────┘            │
+│                                 │                          │
+│                                 ▼                          │
+│                    ┌─────────────────────────┐            │
+│                    │  Model Serialization    │            │
+│                    │  phishing_model_v1.pkl  │            │
+│                    └─────────────────────────┘            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 6.7.2 Backend API Layer
+
+The Backend API Layer serves as the bridge between the browser extension and the machine learning model, providing RESTful endpoints for URL classification.
+
+#### 6.7.2.1 Responsibilities
+
+1. **API Gateway Management**
+   - Expose RESTful endpoints for client communication
+   - Handle HTTP request routing and method validation
+   - Implement request/response serialization
+   - Provide automatic API documentation (Swagger/OpenAPI)
+
+2. **Request Processing**
+   - Validate incoming URL format and structure
+   - Sanitize inputs to prevent injection attacks
+   - Implement rate limiting to prevent abuse
+   - Log requests for monitoring and debugging
+
+3. **Feature Extraction Orchestration**
+   - Parse URLs into constituent components
+   - Invoke feature extraction functions
+   - Aggregate features into model input format
+   - Handle extraction errors gracefully
+
+4. **Model Serving**
+   - Load ML models into memory at startup
+   - Manage model lifecycle and versioning
+   - Route requests to appropriate model version
+   - Cache model predictions for frequent URLs
+
+5. **Response Formation**
+   - Format predictions into standardized JSON responses
+   - Include metadata (timestamp, version, confidence)
+   - Implement error responses with appropriate status codes
+   - Compress responses for bandwidth efficiency
+
+6. **System Health Monitoring**
+   - Provide health check endpoints for uptime monitoring
+   - Track API performance metrics (latency, throughput)
+   - Log errors and exceptions for debugging
+   - Support graceful shutdown and restart
+
+#### 6.7.2.2 Inputs
+
+| Input Type | Source | Format | Description |
+|------------|--------|--------|-------------|
+| HTTP Request | Chrome Extension | JSON | POST request with URL to classify |
+| URL String | Request Body | String | Target URL for phishing detection |
+| API Key | Request Header | String | Authentication token (optional) |
+| User Feedback | Feedback Endpoint | JSON | False positive/negative reports |
+| Configuration | Config File | YAML/JSON | API settings, model paths, thresholds |
+
+**Example API Request:**
+```json
+POST /api/v1/predict
+Content-Type: application/json
+
+{
+  "url": "http://paypal-verify.suspicious-site.xyz/login",
+  "user_id": "anonymous",
+  "client_version": "1.0.0"
+}
+```
+
+#### 6.7.2.3 Outputs
+
+| Output Type | Destination | Format | Description |
+|-------------|-------------|--------|-------------|
+| Classification Result | Chrome Extension | JSON | Prediction with confidence and metadata |
+| HTTP Status Code | Client | Integer | 200 (success), 400 (bad request), 500 (error) |
+| Error Message | Client | JSON | Detailed error description for failures |
+| Log Entries | Log File | Text | Request logs for monitoring and analytics |
+| Metrics | Monitoring System | JSON | Performance metrics (response time, throughput) |
+
+**Example API Response:**
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "url": "http://paypal-verify.suspicious-site.xyz/login",
+  "prediction": "phishing",
+  "confidence": 0.89,
+  "risk_level": "high",
+  "features": {
+    "url_length": 52,
+    "num_dots": 3,
+    "suspicious_tld": true,
+    "has_brand_keyword": true
+  },
+  "model_version": "v1.0",
+  "timestamp": "2026-02-15T10:30:45Z",
+  "processing_time_ms": 127
+}
+```
+
+#### 6.7.2.4 Dependencies
+
+**Python Libraries:**
+- `fastapi` (>=0.100.0): Modern web framework for API development
+- `uvicorn` (>=0.23.0): ASGI server for production deployment
+- `pydantic` (>=2.0.0): Data validation using Python type annotations
+- `python-dotenv`: Environment variable management
+- `aiofiles`: Async file operations
+- `httpx`: Async HTTP client for external requests
+
+**System Dependencies:**
+- Python 3.10+ runtime
+- Trained ML model files (.pkl)
+- SSL/TLS certificates for HTTPS
+- Configuration files (API keys, model paths)
+
+**External Services (Optional):**
+- WHOIS API for domain age lookup
+- VirusTotal API for additional threat intelligence
+- Logging service (e.g., Sentry) for error tracking
+
+#### 6.7.2.5 API Endpoint Specifications
+
+##### Endpoint 1: URL Classification
+
+```python
+@app.post("/api/v1/predict")
+async def predict_url(request: URLPredictionRequest) -> URLPredictionResponse:
+    """
+    Classify a URL as phishing or legitimate.
+    
+    Args:
+        request: URLPredictionRequest containing URL and optional metadata
+        
+    Returns:
+        URLPredictionResponse with classification, confidence, and risk level
+        
+    Raises:
+        HTTPException 400: Invalid URL format
+        HTTPException 429: Rate limit exceeded
+        HTTPException 500: Internal server error
+    """
+```
+
+**Request Schema (Pydantic):**
+```python
+class URLPredictionRequest(BaseModel):
+    url: HttpUrl  # Validates URL format
+    user_id: Optional[str] = "anonymous"
+    client_version: Optional[str] = None
+    
+    @validator('url')
+    def validate_url(cls, v):
+        if len(v) > 2048:
+            raise ValueError("URL exceeds maximum length")
+        return v
+```
+
+**Response Schema:**
+```python
+class URLPredictionResponse(BaseModel):
+    url: str
+    prediction: Literal["phishing", "legitimate"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    risk_level: Literal["high", "medium", "low"]
+    features: Dict[str, Union[int, float, bool]]
+    model_version: str
+    timestamp: datetime
+    processing_time_ms: int
+```
+
+##### Endpoint 2: Health Check
+
+```python
+@app.get("/api/v1/health")
+async def health_check() -> HealthCheckResponse:
+    """
+    Health check endpoint for monitoring system status.
+    
+    Returns:
+        HealthCheckResponse with system status and metrics
+    """
+```
+
+**Response Example:**
+```json
+{
+  "status": "healthy",
+  "model_loaded": true,
+  "model_version": "v1.0",
+  "uptime_seconds": 3600,
+  "total_requests": 1523,
+  "avg_response_time_ms": 145,
+  "timestamp": "2026-02-15T10:30:45Z"
+}
+```
+
+##### Endpoint 3: Feedback Collection
+
+```python
+@app.post("/api/v1/feedback")
+async def submit_feedback(feedback: FeedbackRequest) -> FeedbackResponse:
+    """
+    Collect user feedback on classification accuracy.
+    
+    Args:
+        feedback: User-reported correction or validation
+        
+    Returns:
+        Acknowledgment of feedback receipt
+    """
+```
+
+#### 6.7.2.6 Backend Architecture Diagram
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    FastAPI Backend Server                        │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                    API Gateway Layer                       │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐  │ │
+│  │  │   Routing    │  │   CORS       │  │  Rate Limiter  │  │ │
+│  │  │   Handler    │  │  Middleware  │  │                │  │ │
+│  │  └──────────────┘  └──────────────┘  └────────────────┘  │ │
+│  └─────────────────────────────┬──────────────────────────────┘ │
+│                                │                                │
+│  ┌─────────────────────────────▼──────────────────────────────┐ │
+│  │                  Request Validation Layer                  │ │
+│  │  • Pydantic Models                                         │ │
+│  │  • URL Format Validation                                   │ │
+│  │  • Input Sanitization                                      │ │
+│  └─────────────────────────────┬──────────────────────────────┘ │
+│                                │                                │
+│  ┌─────────────────────────────▼──────────────────────────────┐ │
+│  │                   Business Logic Layer                     │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │         Feature Extraction Service                   │ │ │
+│  │  │  • URL Parser                                        │ │ │
+│  │  │  • Lexical Feature Computer                          │ │ │
+│  │  │  • Host Feature Extractor                            │ │ │
+│  │  │  • Feature Vector Builder                            │ │ │
+│  │  └──────────────────────────┬───────────────────────────┘ │ │
+│  │                             │                              │ │
+│  │  ┌──────────────────────────▼───────────────────────────┐ │ │
+│  │  │         Model Inference Service                      │ │ │
+│  │  │  • Model Loader (Singleton)                          │ │ │
+│  │  │  • Prediction Engine                                 │ │ │
+│  │  │  • Confidence Calculator                             │ │ │
+│  │  │  • Result Interpreter                                │ │ │
+│  │  └──────────────────────────┬───────────────────────────┘ │ │
+│  │                             │                              │ │
+│  │  ┌──────────────────────────▼───────────────────────────┐ │ │
+│  │  │         Response Formatting Service                  │ │ │
+│  │  │  • JSON Serializer                                   │ │ │
+│  │  │  • Metadata Enrichment                               │ │ │
+│  │  │  • Error Handler                                     │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                      Support Services                      │ │
+│  │  ┌────────────┐  ┌──────────────┐  ┌──────────────────┐  │ │
+│  │  │   Logger   │  │  Cache       │  │  Monitoring      │  │ │
+│  │  │            │  │  (Redis)     │  │  (Prometheus)    │  │ │
+│  │  └────────────┘  └──────────────┘  └──────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                     Data Access Layer                      │ │
+│  │  ┌────────────┐  ┌──────────────┐  ┌──────────────────┐  │ │
+│  │  │   Model    │  │   Feature    │  │   Feedback       │  │ │
+│  │  │   Store    │  │   Config     │  │   Database       │  │ │
+│  │  └────────────┘  └──────────────┘  └──────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 6.7.3 Browser Extension Layer
+
+The Browser Extension Layer provides the user-facing interface and real-time URL interception capabilities within the Chrome browser.
+
+#### 6.7.3.1 Responsibilities
+
+1. **Navigation Interception**
+   - Monitor all navigation events before page load
+   - Capture URL changes from address bar, links, and redirects
+   - Distinguish between user-initiated and automatic navigation
+   - Support multiple navigation types (typed, link click, form submission)
+
+2. **Local Decision Making**
+   - Check local cache for recent URL classifications
+   - Apply caching logic with time-based expiration
+   - Manage whitelist of user-approved domains
+   - Implement offline fallback behavior
+
+3. **API Communication**
+   - Construct and send HTTPS requests to backend API
+   - Handle API responses asynchronously
+   - Implement retry logic with exponential backoff
+   - Manage timeout and error scenarios
+
+4. **User Interface Management**
+   - Display blocking pages for high-risk phishing URLs
+   - Inject warning banners for medium-risk URLs
+   - Render popup interface for settings and statistics
+   - Provide intuitive controls for user actions
+
+5. **Data Management**
+   - Store user preferences using chrome.storage.local
+   - Maintain whitelist and blacklist
+   - Cache URL classifications with TTL
+   - Track usage statistics (threats blocked, URLs checked)
+
+6. **Security Enforcement**
+   - Prevent navigation to blocked URLs
+   - Implement Content Security Policy (CSP)
+   - Validate API responses for tampering
+   - Ensure secure communication channels
+
+#### 6.7.3.2 Inputs
+
+| Input Type | Source | Format | Description |
+|------------|--------|--------|-------------|
+| Navigation Event | Chrome Browser | Event Object | User navigation to new URL |
+| User Action | Browser UI | Click/Input Event | User interaction with warnings or settings |
+| API Response | Backend | JSON | Classification result from API |
+| Cached Data | chrome.storage.local | JSON | Previously stored classifications and preferences |
+| Configuration | User Settings | JSON | User-defined preferences and whitelists |
+
+**Navigation Event Example:**
+```javascript
+chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+  // details.url: "http://suspicious-site.com"
+  // details.tabId: 12345
+  // details.frameId: 0
+  // details.timeStamp: 1708001445000
+});
+```
+
+#### 6.7.3.3 Outputs
+
+| Output Type | Destination | Format | Description |
+|-------------|-------------|--------|-------------|
+| API Request | Backend Server | HTTPS/JSON | URL classification request |
+| Warning UI | Browser Tab | HTML/CSS | Visual warning for phishing threats |
+| Statistics | Popup UI | HTML | Threats blocked, URLs scanned count |
+| Cache Update | chrome.storage.local | JSON | Updated classification cache |
+| User Feedback | Backend API | JSON | False positive/negative reports |
+
+**Warning Page HTML Structure:**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Phishing Threat Detected</title>
+  <style>
+    /* Critical warning styles */
+  </style>
+</head>
+<body>
+  <div class="warning-container">
+    <div class="warning-icon">⚠️</div>
+    <h1>Phishing Threat Detected</h1>
+    <p>The site you're trying to visit has been identified as a phishing threat.</p>
+    <div class="url-display">http://malicious-site.com</div>
+    <div class="confidence">Confidence: 89%</div>
+    <button class="primary-action">Go Back to Safety</button>
+    <a class="secondary-action">Continue Anyway (Not Recommended)</a>
+  </div>
+</body>
+</html>
+```
+
+#### 6.7.3.4 Dependencies
+
+**Chrome Extension APIs:**
+- `chrome.webNavigation`: Intercept navigation events
+- `chrome.webRequest`: Monitor and modify network requests
+- `chrome.tabs`: Manage browser tabs and navigation
+- `chrome.storage.local`: Persistent local data storage
+- `chrome.runtime`: Extension lifecycle and messaging
+- `chrome.declarativeContent`: Page-specific actions
+
+**Web Technologies:**
+- JavaScript ES6+: Core extension logic
+- HTML5: User interface markup
+- CSS3: Styling and animations
+- Fetch API: HTTP communication
+- LocalStorage API: Fallback storage
+
+**Chrome Extension Platform:**
+- Manifest V3: Latest extension architecture
+- Service Workers: Background script execution
+- Content Scripts: Page context injection
+
+#### 6.7.3.5 Extension Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                Chrome Extension Components                       │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │               Background Service Worker                    │ │
+│  │  (Persistent background script, Manifest V3)               │ │
+│  │                                                            │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │         Navigation Event Listener                    │ │ │
+│  │  │  chrome.webNavigation.onBeforeNavigate               │ │ │
+│  │  │  • Capture URL before page load                      │ │ │
+│  │  │  • Extract target URL                                │ │ │
+│  │  │  • Check if user-initiated navigation                │ │ │
+│  │  └────────────────────┬─────────────────────────────────┘ │ │
+│  │                       │                                    │ │
+│  │  ┌────────────────────▼─────────────────────────────────┐ │ │
+│  │  │         Cache & Whitelist Checker                    │ │ │
+│  │  │  • Query chrome.storage.local                        │ │ │
+│  │  │  • Check whitelist (user-approved domains)           │ │ │
+│  │  │  • Check cache (24hr TTL)                            │ │ │
+│  │  │  • Return cached result if available                 │ │ │
+│  │  └────────────────────┬─────────────────────────────────┘ │ │
+│  │                       │                                    │ │
+│  │            Cache Hit? │ Cache Miss?                        │ │
+│  │                       │                                    │ │
+│  │  ┌────────────────────▼─────────────────────────────────┐ │ │
+│  │  │         API Communication Module                     │ │ │
+│  │  │  • Construct API request                             │ │ │
+│  │  │  • Send HTTPS POST to backend                        │ │ │
+│  │  │  • Handle response/timeout/errors                    │ │ │
+│  │  │  • Implement retry with backoff                      │ │ │
+│  │  └────────────────────┬─────────────────────────────────┘ │ │
+│  │                       │                                    │ │
+│  │  ┌────────────────────▼─────────────────────────────────┐ │ │
+│  │  │         Decision Engine                              │ │ │
+│  │  │  • Parse API response                                │ │ │
+│  │  │  • Apply risk thresholds                             │ │ │
+│  │  │    - confidence > 80% → Block                        │ │ │
+│  │  │    - confidence 60-80% → Warn                        │ │ │
+│  │  │    - confidence < 60% → Allow                        │ │ │
+│  │  │  • Update cache with result                          │ │ │
+│  │  └────────────────────┬─────────────────────────────────┘ │ │
+│  │                       │                                    │ │
+│  │  ┌────────────────────▼─────────────────────────────────┐ │ │
+│  │  │         Action Dispatcher                            │ │ │
+│  │  │  • Block: Redirect to warning page                   │ │ │
+│  │  │  • Warn: Send message to content script              │ │ │
+│  │  │  • Allow: Continue navigation                        │ │ │
+│  │  │  • Update statistics                                 │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                    Content Scripts                         │ │
+│  │  (Injected into web pages)                                 │ │
+│  │                                                            │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │         Warning Banner Injector                      │ │ │
+│  │  │  • Receive message from background script            │ │ │
+│  │  │  • Create warning banner DOM element                 │ │ │
+│  │  │  • Inject at top of page                             │ │ │
+│  │  │  • Handle user interactions                          │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  │                                                            │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │         Page Context Monitor                         │ │ │
+│  │  │  • Detect dynamic URL changes                        │ │ │
+│  │  │  • Monitor AJAX navigation (SPA)                     │ │ │
+│  │  │  • Report to background script                       │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                     Popup Interface                        │ │
+│  │  (popup.html, popup.js)                                    │ │
+│  │                                                            │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │         Statistics Display                           │ │ │
+│  │  │  • Total URLs checked                                │ │ │
+│  │  │  • Threats blocked (today/total)                     │ │ │
+│  │  │  • False positives reported                          │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  │                                                            │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │         Settings Panel                               │ │ │
+│  │  │  • Enable/disable protection toggle                  │ │ │
+│  │  │  • Sensitivity slider                                │ │ │
+│  │  │  • Whitelist management UI                           │ │ │
+│  │  │  • Clear cache button                                │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                    Warning Page                            │ │
+│  │  (warning.html, warning.js)                                │ │
+│  │                                                            │ │
+│  │  • Full-page blocking interface                           │ │
+│  │  • Large warning icon and message                         │ │
+│  │  • URL display with confidence score                      │ │
+│  │  • "Go Back" and "Proceed Anyway" buttons                 │ │
+│  │  • Report false positive option                           │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │                   Storage Manager                          │ │
+│  │                                                            │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐                │ │
+│  │  │   Cache         │  │   Whitelist     │                │ │
+│  │  │   {url: result} │  │   [domains]     │                │ │
+│  │  └─────────────────┘  └─────────────────┘                │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐                │ │
+│  │  │   Statistics    │  │   Preferences   │                │ │
+│  │  │   {count, date} │  │   {enabled,...} │                │ │
+│  │  └─────────────────┘  └─────────────────┘                │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### 6.7.3.6 Extension Manifest (V3)
+
+```json
+{
+  "manifest_version": 3,
+  "name": "Phishing URL Detector",
+  "version": "1.0.0",
+  "description": "Real-time ML-based phishing detection",
+  
+  "permissions": [
+    "webNavigation",
+    "webRequest",
+    "storage",
+    "tabs",
+    "activeTab"
+  ],
+  
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "css": ["content.css"],
+    "run_at": "document_start"
+  }],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  
+  "web_accessible_resources": [{
+    "resources": ["warning.html", "icons/*"],
+    "matches": ["<all_urls>"]
+  }],
+  
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
+```
+
+---
+
+### 6.7.4 Adversarial Testing Module
+
+The Adversarial Testing Module evaluates system robustness against sophisticated phishing techniques and edge cases that may evade detection.
+
+#### 6.7.4.1 Responsibilities
+
+1. **Attack Simulation**
+   - Generate synthetic phishing URLs with obfuscation techniques
+   - Simulate zero-day phishing campaigns
+   - Test homograph attacks (IDN homographs)
+   - Evaluate URL shortener redirection chains
+
+2. **Robustness Testing**
+   - Test model performance on adversarial examples
+   - Evaluate decision boundaries and confidence thresholds
+   - Identify failure modes and edge cases
+   - Measure model uncertainty on ambiguous URLs
+
+3. **Evasion Technique Testing**
+   - Test character substitution (0 vs O, 1 vs l)
+   - Evaluate subdomain manipulation
+   - Test URL encoding obfuscation (%20, %2F)
+   - Assess IP address-based phishing
+
+4. **Performance Under Attack**
+   - Measure degradation under adversarial inputs
+   - Test rate limiting and API abuse scenarios
+   - Evaluate system behavior under load
+   - Assess recovery from malicious inputs
+
+5. **Red Team Testing**
+   - Manual penetration testing of API endpoints
+   - Test for injection vulnerabilities
+   - Evaluate XSS resistance in extension UI
+   - Test authentication bypass attempts
+
+#### 6.7.4.2 Inputs
+
+| Input Type | Source | Format | Description |
+|------------|--------|--------|-------------|
+| Adversarial URLs | Synthetic Generator | List[str] | Crafted phishing URLs with obfuscation |
+| Zero-Day Phishing | PhishTank Recent | CSV | Recently reported phishing URLs |
+| Benign Variations | URL Mutator | List[str] | Legitimate URLs with minor modifications |
+| Attack Patterns | Security Research | JSON | Known phishing techniques |
+| Test Specifications | Test Plan | YAML | Test cases and expected outcomes |
+
+**Example Adversarial Test Cases:**
+```python
+adversarial_tests = {
+    "homograph_attack": [
+        "https://pаypal.com",  # Cyrillic 'а' instead of Latin 'a'
+        "https://gооgle.com",  # Cyrillic 'о' instead of Latin 'o'
+    ],
+    "subdomain_spoofing": [
+        "https://paypal.com.verify-account.xyz",
+        "https://secure-facebook-login.attacker.com",
+    ],
+    "url_obfuscation": [
+        "https://example.com%2f@attacker.com",
+        "https://attacker.com%252f%252fexample.com",
+    ],
+    "ip_based_phishing": [
+        "https://192.168.1.100/paypal-login",
+        "https://127.0.0.1:8080/bank-verify",
+    ],
+    "shortener_chains": [
+        "https://bit.ly/3xyz → https://tinyurl.com/abc → phishing-site",
+    ]
+}
+```
+
+#### 6.7.4.3 Outputs
+
+| Output Type | Destination | Format | Description |
+|-------------|-------------|--------|-------------|
+| Test Report | Documentation | PDF/HTML | Comprehensive adversarial testing results |
+| Failure Cases | Development Team | CSV | URLs where model failed |
+| Robustness Metrics | Project Report | JSON | Attack success rates, evasion rates |
+| Recommendations | System Improvement | Markdown | Suggested defenses and model improvements |
+| Security Audit | Stakeholders | PDF | Overall security posture assessment |
+
+**Adversarial Testing Report Structure:**
+```markdown
+# Adversarial Testing Report
+
+## Executive Summary
+- Total test cases: 500
+- Attack success rate: 12%
+- Zero-day detection rate: 88%
+- Critical vulnerabilities: 2
+
+## Attack Category Results
+
+### Homograph Attacks
+- Test cases: 50
+- Detected: 38 (76%)
+- Missed: 12 (24%)
+- Recommendation: Add Unicode normalization
+
+### Subdomain Spoofing
+- Test cases: 100
+- Detected: 92 (92%)
+- Missed: 8 (8%)
+- Status: Good performance
+
+### URL Obfuscation
+- Test cases: 75
+- Detected: 60 (80%)
+- Missed: 15 (20%)
+- Recommendation: Enhance encoding detection
+```
+
+#### 6.7.4.4 Dependencies
+
+**Testing Libraries:**
+- `pytest`: Test framework and fixtures
+- `hypothesis`: Property-based testing
+- `faker`: Synthetic data generation
+- `requests`: API testing
+- `selenium`: Browser automation for extension testing
+
+**Security Tools:**
+- `OWASP ZAP`: API security testing
+- `Burp Suite`: Manual penetration testing
+- `sqlmap`: SQL injection testing (if database added)
+
+**Analysis Tools:**
+- `matplotlib`: Visualization of attack patterns
+- `pandas`: Test result analysis
+- `scikit-learn`: Adversarial robustness metrics
+
+#### 6.7.4.5 Testing Methodology
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│              Adversarial Testing Pipeline                        │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  PHASE 1: Test Case Generation                            │ │
+│  │                                                            │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐  │ │
+│  │  │  Synthetic   │  │  Zero-Day    │  │  Real-World    │  │ │
+│  │  │  Adversarial │  │  Phishing    │  │  Edge Cases    │  │ │
+│  │  │  Generator   │  │  URLs        │  │  Collection    │  │ │
+│  │  └──────┬───────┘  └──────┬───────┘  └────────┬───────┘  │ │
+│  │         │                 │                    │          │ │
+│  │         └─────────────────┴────────────────────┘          │ │
+│  │                           │                                │ │
+│  │                           ▼                                │ │
+│  │              ┌─────────────────────────┐                  │ │
+│  │              │  Combined Test Suite   │                  │ │
+│  │              │  (500+ test cases)     │                  │ │
+│  │              └────────────┬────────────┘                  │ │
+│  └─────────────────────────────┼──────────────────────────────┘ │
+│                                │                                │
+│  ┌─────────────────────────────▼──────────────────────────────┐ │
+│  │  PHASE 2: Automated Testing                              │ │
+│  │                                                            │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │  For each test case:                                 │ │ │
+│  │  │  1. Send to API endpoint                             │ │ │
+│  │  │  2. Record prediction & confidence                   │ │ │
+│  │  │  3. Compare with expected label                      │ │ │
+│  │  │  4. Classify as: TP, TN, FP, FN                      │ │ │
+│  │  └──────────────────────────┬───────────────────────────┘ │ │
+│  │                             │                              │ │
+│  │  ┌──────────────────────────▼───────────────────────────┐ │ │
+│  │  │  Collect Results:                                    │ │ │
+│  │  │  • Attack success rate                               │ │ │
+│  │  │  • False negative rate on adversarial               │ │ │
+│  │  │  • Confidence score distribution                     │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  PHASE 3: Manual Penetration Testing                      │ │
+│  │                                                            │ │
+│  │  • API endpoint fuzzing                                   │ │
+│  │  • Input validation bypass attempts                       │ │
+│  │  • Extension XSS testing                                  │ │
+│  │  • CSRF vulnerability checks                              │ │
+│  │  • Rate limiting evasion                                  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                │                                │
+│  ┌─────────────────────────────▼──────────────────────────────┐ │
+│  │  PHASE 4: Analysis & Reporting                            │ │
+│  │                                                            │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │  Failure Case Analysis:                              │ │ │
+│  │  │  • Identify patterns in missed phishing              │ │ │
+│  │  │  • Analyze confidence scores of failures             │ │ │
+│  │  │  • Categorize attack techniques                      │ │ │
+│  │  └──────────────────────────┬───────────────────────────┘ │ │
+│  │                             │                              │ │
+│  │  ┌──────────────────────────▼───────────────────────────┐ │ │
+│  │  │  Generate Recommendations:                           │ │ │
+│  │  │  • Model improvements                                │ │ │
+│  │  │  • Feature engineering suggestions                   │ │ │
+│  │  │  • Security hardening measures                       │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### 6.7.4.6 Key Adversarial Test Categories
+
+**1. Encoding & Obfuscation Attacks:**
+- URL encoding: `%2F%2Fpaypal.com`
+- Double encoding: `%252F%252F`
+- Mixed encoding: `http://example%2Ecom`
+- Unicode normalization bypass
+
+**2. Homograph & Typosquatting:**
+- IDN homographs: Cyrillic/Greek characters
+- Visual similarity: `rn` vs `m`
+- Character substitution: `0` vs `O`
+- Missing characters: `gogle.com`
+
+**3. Subdomain Manipulation:**
+- Trusted domain in subdomain: `paypal.attacker.com`
+- Long subdomain chains: `a.b.c.d.e.attacker.com`
+- Hyphen tricks: `pay-pal-secure.com`
+
+**4. Structural Attacks:**
+- IP address URLs: `http://192.168.1.1/login`
+- Port obfuscation: `:8080`, `:443`
+- Fragment manipulation: `#@trusted.com`
+- Username in URL: `http://user@attacker.com`
+
+**5. Redirection Chains:**
+- URL shortener abuse
+- Multiple 302 redirects
+- JavaScript-based redirects
+- Meta refresh redirects
+
+---
+
+## 6.6 Machine Learning Requirements Specification
+
+### 6.6.1 ML System Overview
+
+The machine learning component forms the core intelligence of the phishing detection system. This section defines the requirements for model selection, feature engineering, training procedures, evaluation metrics, and deployment strategies to ensure a robust, accurate, and maintainable ML pipeline.
+
+#### ML Pipeline Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    OFFLINE TRAINING PIPELINE                    │
+└─────────────────────────────────────────────────────────────────┘
+
+[1] Data Collection
+    ├── Phishing URLs: PhishTank, OpenPhish
+    ├── Legitimate URLs: Alexa Top 1M, Common Crawl
+    └── Dataset size: 100,000+ URLs (50k phishing, 50k legitimate)
+              ↓
+[2] Data Preprocessing
+    ├── Remove duplicates
+    ├── URL normalization (lowercase, remove trailing slash)
+    ├── Handle missing/malformed URLs
+    ├── Label validation
+    └── Train-test split (70-15-15)
+              ↓
+[3] Feature Engineering
+    ├── Lexical features (15+ features)
+    ├── Domain-based features (10+ features)
+    ├── Statistical features (5+ features)
+    └── Binary flags (5+ features)
+              ↓
+[4] Feature Scaling & Transformation
+    ├── StandardScaler or MinMaxScaler
+    ├── Handle feature distributions
+    └── Save scaler object for deployment
+              ↓
+[5] Model Training
+    ├── Algorithm: XGBoost, Random Forest
+    ├── Cross-validation: 5-fold stratified
+    ├── Hyperparameter tuning: Grid/Random search
+    └── Handle class imbalance: SMOTE or class weights
+              ↓
+[6] Model Evaluation
+    ├── Metrics: Accuracy, Precision, Recall, F1, ROC-AUC
+    ├── Confusion matrix analysis
+    ├── Feature importance ranking
+    └── Error analysis
+              ↓
+[7] Model Serialization
+    ├── Save trained model (.pkl)
+    ├── Save scaler (.joblib)
+    ├── Save feature metadata (JSON)
+    └── Version tagging (v1.0, v1.1, etc.)
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   ONLINE INFERENCE PIPELINE                      │
+└─────────────────────────────────────────────────────────────────┘
+
+[1] Model Loading (at startup)
+    ├── Load trained model from disk
+    ├── Load scaler object
+    ├── Verify model integrity
+    └── Warm-up inference
+              ↓
+[2] Feature Extraction (per request)
+    ├── Parse URL string
+    ├── Compute features (same as training)
+    └── Return feature vector
+              ↓
+[3] Feature Scaling
+    ├── Apply loaded scaler
+    └── Transform to model input format
+              ↓
+[4] Model Prediction
+    ├── Binary classification (0=legitimate, 1=phishing)
+    ├── Probability scores [P(legitimate), P(phishing)]
+    └── Confidence = max(probabilities)
+              ↓
+[5] Post-processing
+    ├── Risk categorization (safe/low/medium/high)
+    ├── Response formatting
+    └── Logging (for monitoring)
+```
+
+---
+
+### 6.6.2 Model Selection Strategy
+
+#### Requirements for Algorithm Selection
+
+| Criterion | Requirement | Priority | Rationale |
+|-----------|-------------|----------|-----------|
+| **Accuracy** | ≥95% on test set | Critical | Minimize false negatives (missed phishing sites) |
+| **Precision** | ≥93% | Critical | Minimize false positives (legitimate sites blocked) |
+| **Inference Speed** | <50ms per prediction | Critical | Real-time requirement for browser extension |
+| **Interpretability** | Medium to high | High | Enable feature importance analysis and debugging |
+| **Training Time** | <2 hours on standard hardware | Medium | Enable rapid experimentation and iteration |
+| **Model Size** | <100MB serialized | Medium | Deployment efficiency and memory constraints |
+| **Robustness** | Resilient to adversarial examples | High | Resist URL obfuscation techniques |
+| **Scalability** | Handle 100k+ training samples | Medium | Support large dataset training |
+
+#### Candidate Algorithms Evaluation
+
+| Algorithm | Pros | Cons | Expected Performance | Recommendation |
+|-----------|------|------|---------------------|----------------|
+| **XGBoost** | • Excellent accuracy on tabular data<br>• Fast inference<br>• Built-in feature importance<br>• Handles missing values<br>• Regularization to prevent overfitting | • Black-box nature<br>• Requires hyperparameter tuning<br>• Moderate training time | Accuracy: 96-98%<br>F1-Score: 95-97%<br>Inference: 10-30ms | **Primary Choice** |
+| **Random Forest** | • Good accuracy<br>• Robust to overfitting<br>• Easily interpretable<br>• No feature scaling needed<br>• Parallel training | • Larger model size<br>• Slower inference than XGBoost<br>• Can be memory intensive | Accuracy: 94-96%<br>F1-Score: 93-95%<br>Inference: 20-50ms | **Secondary/Ensemble** |
+| **Logistic Regression** | • Very fast inference<br>• Highly interpretable<br>• Small model size<br>• Easy to deploy | • Lower accuracy on complex patterns<br>• Requires feature engineering<br>• Linear decision boundary | Accuracy: 88-92%<br>F1-Score: 87-90%<br>Inference: 1-5ms | Baseline only |
+| **Neural Networks (MLP)** | • Can learn complex patterns<br>• High potential accuracy | • Requires more data<br>• Longer training time<br>• Less interpretable<br>• Slower inference | Accuracy: 95-97%<br>F1-Score: 94-96%<br>Inference: 30-100ms | Future consideration |
+| **Naive Bayes** | • Very fast training/inference<br>• Simple implementation | • Strong independence assumption<br>• Lower accuracy | Accuracy: 85-88%<br>F1-Score: 83-86%<br>Inference: 1-5ms | Not recommended |
+
+#### Selected Algorithm: XGBoost
+
+**Justification**:
+1. **Superior Performance**: XGBoost consistently achieves state-of-the-art results on tabular data, with expected accuracy >95%
+2. **Inference Speed**: Optimized C++ implementation provides <50ms inference, meeting real-time requirements
+3. **Built-in Regularization**: L1 (Lasso) and L2 (Ridge) regularization prevent overfitting
+4. **Feature Importance**: Native support for feature importance analysis aids debugging and explainability
+5. **Robustness**: Tree-based models are less sensitive to feature scaling and outliers
+6. **Industry Adoption**: Widely used in production systems with proven reliability
+
+**Ensemble Strategy** (Optional Enhancement):
+- Combine XGBoost with Random Forest using soft voting
+- Weights: 60% XGBoost, 40% Random Forest (tuned on validation set)
+- Improves robustness and reduces overfitting
+- Trade-off: Slightly slower inference (~50-80ms)
+
+#### Hyperparameter Search Space
+
+**XGBoost Hyperparameters**:
+
+| Parameter | Search Space | Default | Purpose |
+|-----------|--------------|---------|---------|
+| `n_estimators` | [100, 200, 300] | 200 | Number of boosting rounds |
+| `max_depth` | [5, 7, 10, 15] | 7 | Maximum tree depth (controls complexity) |
+| `learning_rate` | [0.01, 0.05, 0.1, 0.2] | 0.1 | Step size shrinkage (prevents overfitting) |
+| `subsample` | [0.7, 0.8, 0.9, 1.0] | 0.8 | Fraction of samples per tree |
+| `colsample_bytree` | [0.7, 0.8, 0.9, 1.0] | 0.8 | Fraction of features per tree |
+| `min_child_weight` | [1, 3, 5] | 1 | Minimum sum of instance weight in child |
+| `gamma` | [0, 0.1, 0.2] | 0 | Minimum loss reduction for split |
+| `reg_alpha` | [0, 0.1, 1] | 0 | L1 regularization term |
+| `reg_lambda` | [1, 2, 3] | 1 | L2 regularization term |
+| `scale_pos_weight` | [1, 1.5, 2] | 1 | Balance of positive/negative weights |
+
+**Optimization Method**:
+- **Grid Search**: Exhaustive search over discrete parameter grid
+- **Random Search**: Sample random combinations (faster, often sufficient)
+- **Bayesian Optimization**: Intelligent search using Gaussian processes (most efficient)
+
+**Recommendation**: Use Randomized Search (50-100 iterations) followed by fine-tuning with Grid Search
+
+---
+
+### 6.6.3 Feature Engineering Requirements
+
+Feature engineering is critical for model performance. This section defines the comprehensive feature set extracted from URL strings.
+
+#### Feature Categories Overview
+
+| Category | Number of Features | Computational Cost | Importance |
+|----------|-------------------|-------------------|------------|
+| **Lexical Features** | 15-20 | Low | High |
+| **Domain-Based Features** | 10-15 | Medium | Very High |
+| **Statistical Features** | 5-10 | Medium | Medium |
+| **Binary Flags** | 5-10 | Low | High |
+| **Optional/External** | 5+ | High (API calls) | Medium |
+| **Total** | **35-50+** | - | - |
+
+---
+
+#### 6.6.3.1 Lexical Features
+
+Lexical features analyze the character-level composition of the URL string.
+
+| Feature ID | Feature Name | Description | Example | Computation |
+|------------|--------------|-------------|---------|-------------|
+| **LEX-01** | `url_length` | Total character count of URL | `https://example.com/path` → 26 | `len(url)` |
+| **LEX-02** | `domain_length` | Character count of domain only | `example.com` → 11 | `len(domain)` |
+| **LEX-03** | `path_length` | Character count of path component | `/path/to/page` → 13 | `len(path)` |
+| **LEX-04** | `num_dots` | Count of '.' characters | `sub.example.co.uk` → 3 | `url.count('.')` |
+| **LEX-05** | `num_hyphens` | Count of '-' characters | `my-secure-bank.com` → 2 | `url.count('-')` |
+| **LEX-06** | `num_underscores` | Count of '_' characters | `user_login.php` → 1 | `url.count('_')` |
+| **LEX-07** | `num_slashes` | Count of '/' characters | `https://a.com/b/c` → 3 | `url.count('/')` |
+| **LEX-08** | `num_questionmarks` | Count of '?' characters | Query parameters indicator | `url.count('?')` |
+| **LEX-09** | `num_equals` | Count of '=' characters | Query parameter assignments | `url.count('=')` |
+| **LEX-10** | `num_at` | Count of '@' characters | Credential obfuscation | `url.count('@')` |
+| **LEX-11** | `num_ampersands` | Count of '&' characters | Multiple query parameters | `url.count('&')` |
+| **LEX-12** | `num_digits` | Count of numeric characters | `bank123.com` → 3 | `sum(c.isdigit() for c in url)` |
+| **LEX-13** | `num_letters` | Count of alphabetic characters | Character distribution | `sum(c.isalpha() for c in url)` |
+| **LEX-14** | `num_special_chars` | Count of special symbols | `%`, `#`, `$`, etc. | Custom function |
+| **LEX-15** | `url_entropy` | Shannon entropy of URL string | Measures randomness | `-Σ(p(x) * log2(p(x)))` |
+| **LEX-16** | `digit_letter_ratio` | Ratio of digits to letters | Suspicious if high | `num_digits / num_letters` |
+| **LEX-17** | `vowel_consonant_ratio` | Ratio of vowels to consonants | Natural language check | `vowels / consonants` |
+| **LEX-18** | `uppercase_ratio` | Ratio of uppercase letters | Abnormal patterns | `uppercase / total_letters` |
+| **LEX-19** | `longest_word_length` | Max length of tokens in URL | Abnormally long tokens | `max(len(token))` |
+| **LEX-20** | `avg_token_length` | Average token length | Token distribution | `mean(len(tokens))` |
+
+**Feature Implementation Example**:
+```python
+import math
+from collections import Counter
+from urllib.parse import urlparse
+
+def extract_lexical_features(url: str) -> dict:
+    """Extract lexical features from URL string"""
+    features = {}
+    
+    # Basic counts
+    features['url_length'] = len(url)
+    features['num_dots'] = url.count('.')
+    features['num_hyphens'] = url.count('-')
+    features['num_underscores'] = url.count('_')
+    features['num_slashes'] = url.count('/')
+    features['num_questionmarks'] = url.count('?')
+    features['num_equals'] = url.count('=')
+    features['num_at'] = url.count('@')
+    features['num_ampersands'] = url.count('&')
+    
+    # Character type counts
+    features['num_digits'] = sum(c.isdigit() for c in url)
+    features['num_letters'] = sum(c.isalpha() for c in url)
+    features['num_special_chars'] = sum(not c.isalnum() for c in url)
+    
+    # Ratios
+    if features['num_letters'] > 0:
+        features['digit_letter_ratio'] = features['num_digits'] / features['num_letters']
+    else:
+        features['digit_letter_ratio'] = 0
+    
+    # Shannon entropy
+    char_freq = Counter(url)
+    length = len(url)
+    entropy = -sum((count/length) * math.log2(count/length) 
+                   for count in char_freq.values())
+    features['url_entropy'] = entropy
+    
+    # Parse components
+    parsed = urlparse(url)
+    features['domain_length'] = len(parsed.netloc)
+    features['path_length'] = len(parsed.path)
+    
+    return features
+```
+
+---
+
+#### 6.6.3.2 Domain-Based Features
+
+Domain-based features analyze the hostname/domain characteristics.
+
+| Feature ID | Feature Name | Description | Example | Phishing Indicator |
+|------------|--------------|-------------|---------|-------------------|
+| **DOM-01** | `num_subdomains` | Count of subdomain levels | `a.b.example.com` → 2 | High count suspicious |
+| **DOM-02** | `subdomain_depth` | Maximum subdomain nesting | `secure.login.paypal.verify.tk` → 4 | >3 is suspicious |
+| **DOM-03** | `domain_token_count` | Number of tokens in domain | `my-secure-bank` → 3 | Many tokens suspicious |
+| **DOM-04** | `longest_subdomain` | Length of longest subdomain | `verylongsubdomain.ex.com` → 17 | >15 suspicious |
+| **DOM-05** | `avg_subdomain_length` | Average subdomain length | Statistical measure | Abnormal if very high/low |
+| **DOM-06** | `has_ip_address` | Domain is IP (not domain name) | `192.168.1.1` → 1 | Binary: 1=IP, 0=domain |
+| **DOM-07** | `is_https` | URL uses HTTPS | `https://` → 1, `http://` → 0 | HTTPS is more legitimate |
+| **DOM-08** | `suspicious_tld` | TLD in suspicious list | `.tk`, `.ml`, `.ga`, `.cf` | Binary flag |
+| **DOM-09** | `tld_length` | Length of TLD | `.com` → 3, `.museum` → 6 | Unusual lengths suspicious |
+| **DOM-10** | `domain_has_hyphen` | Domain contains hyphen | `my-bank.com` → 1 | Often used in phishing |
+| **DOM-11** | `domain_has_digit` | Domain contains digit | `bank123.com` → 1 | Suspicious for brands |
+| **DOM-12** | `port_number_present` | Non-standard port in URL | `:8080` → 1 | Non-80/443 suspicious |
+| **DOM-13** | `is_shortening_service` | URL uses shortener | `bit.ly`, `tinyurl.com` | Binary flag |
+| **DOM-14** | `contains_brand_name` | Common brand in subdomain | `paypal` in subdomain | Brand spoofing |
+| **DOM-15** | `punycode_domain` | IDN with punycode encoding | `xn--...` domains | Homograph attack |
+
+**Suspicious TLD List**:
+```python
+SUSPICIOUS_TLDS = {
+    '.tk', '.ml', '.ga', '.cf', '.gq',  # Free TLDs (common in phishing)
+    '.xyz', '.top', '.work', '.click',   # Cheap TLDs
+    '.info', '.biz',                      # Often abused
+    '.club', '.online', '.site'           # New generic TLDs
+}
+```
+
+**URL Shortening Services**:
+```python
+SHORTENING_SERVICES = {
+    'bit.ly', 'tinyurl.com', 'goo.gl', 't.co',
+    'ow.ly', 'buff.ly', 'adf.ly', 'short.link'
+}
+```
+
+**Common Brand Keywords** (for spoofing detection):
+```python
+BRAND_KEYWORDS = [
+    'paypal', 'amazon', 'google', 'facebook', 'apple',
+    'microsoft', 'netflix', 'ebay', 'instagram', 'twitter',
+    'bank', 'signin', 'login', 'verify', 'account',
+    'secure', 'update', 'confirm', 'wallet'
+]
+```
+
+**Domain Feature Implementation**:
+```python
+import tldextract
+import re
+
+def extract_domain_features(url: str) -> dict:
+    """Extract domain-based features from URL"""
+    features = {}
+    parsed = urlparse(url)
+    domain = parsed.netloc
+    
+    # Extract TLD using tldextract
+    ext = tldextract.extract(url)
+    subdomain = ext.subdomain
+    domain_name = ext.domain
+    tld = ext.suffix
+    
+    # Subdomain analysis
+    if subdomain:
+        subdomains = subdomain.split('.')
+        features['num_subdomains'] = len(subdomains)
+        features['subdomain_depth'] = len(subdomains)
+        features['longest_subdomain'] = max(len(s) for s in subdomains)
+        features['avg_subdomain_length'] = sum(len(s) for s in subdomains) / len(subdomains)
+    else:
+        features['num_subdomains'] = 0
+        features['subdomain_depth'] = 0
+        features['longest_subdomain'] = 0
+        features['avg_subdomain_length'] = 0
+    
+    # Domain token analysis
+    domain_tokens = re.split(r'[-_.]', domain_name)
+    features['domain_token_count'] = len(domain_tokens)
+    
+    # Binary flags
+    features['has_ip_address'] = 1 if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', domain) else 0
+    features['is_https'] = 1 if parsed.scheme == 'https' else 0
+    features['suspicious_tld'] = 1 if ('.' + tld) in SUSPICIOUS_TLDS else 0
+    features['tld_length'] = len(tld)
+    features['domain_has_hyphen'] = 1 if '-' in domain_name else 0
+    features['domain_has_digit'] = 1 if any(c.isdigit() for c in domain_name) else 0
+    features['port_number_present'] = 1 if parsed.port else 0
+    features['is_shortening_service'] = 1 if domain in SHORTENING_SERVICES else 0
+    
+    # Brand name detection (case-insensitive)
+    domain_lower = domain.lower()
+    features['contains_brand_name'] = 1 if any(brand in domain_lower for brand in BRAND_KEYWORDS) else 0
+    
+    # Punycode detection
+    features['punycode_domain'] = 1 if 'xn--' in domain else 0
+    
+    return features
+```
+
+---
+
+#### 6.6.3.3 Statistical Features
+
+Statistical features capture distributional properties and patterns.
+
+| Feature ID | Feature Name | Description | Formula | Interpretation |
+|------------|--------------|-------------|---------|----------------|
+| **STAT-01** | `url_entropy` | Shannon entropy of character distribution | H = -Σ p(x) log₂ p(x) | Higher = more random |
+| **STAT-02** | `consonant_vowel_ratio` | Ratio of consonants to vowels | consonants / vowels | Natural language check |
+| **STAT-03** | `digit_concentration` | Digits clustered or distributed | Std dev of digit positions | Clustering suspicious |
+| **STAT-04** | `special_char_concentration` | Special chars clustered | Std dev of special positions | Clustering suspicious |
+| **STAT-05** | `path_token_count` | Number of path segments | `/a/b/c` → 3 | Many segments suspicious |
+| **STAT-06** | `query_param_count` | Number of query parameters | `?a=1&b=2` → 2 | Many params suspicious |
+| **STAT-07** | `avg_word_length` | Average token length across URL | mean(token lengths) | Statistical baseline |
+| **STAT-08** | `std_word_length` | Std deviation of token lengths | std(token lengths) | High variance suspicious |
+| **STAT-09** | `char_diversity` | Unique chars / total chars | len(set(url)) / len(url) | Low diversity suspicious |
+| **STAT-10** | `hex_encoding_ratio` | Percentage of URL that is hex-encoded | `%XX` sequences | High ratio suspicious |
+
+**Statistical Feature Implementation**:
+```python
+import numpy as np
+from collections import Counter
+
+def extract_statistical_features(url: str) -> dict:
+    """Extract statistical features from URL"""
+    features = {}
+    
+    # Shannon entropy (already in lexical)
+    char_freq = Counter(url)
+    length = len(url)
+    entropy = -sum((count/length) * np.log2(count/length) 
+                   for count in char_freq.values())
+    features['url_entropy'] = entropy
+    
+    # Character diversity
+    features['char_diversity'] = len(set(url)) / len(url) if len(url) > 0 else 0
+    
+    # Vowel/consonant analysis
+    vowels = 'aeiouAEIOU'
+    consonants = 'bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ'
+    vowel_count = sum(c in vowels for c in url)
+    consonant_count = sum(c in consonants for c in url)
+    features['consonant_vowel_ratio'] = consonant_count / vowel_count if vowel_count > 0 else 0
+    
+    # Parse URL components
+    parsed = urlparse(url)
+    
+    # Path analysis
+    path_tokens = [t for t in parsed.path.split('/') if t]
+    features['path_token_count'] = len(path_tokens)
+    
+    # Query parameter analysis
+    query_params = parsed.query.split('&') if parsed.query else []
+    features['query_param_count'] = len(query_params)
+    
+    # Token length statistics
+    tokens = re.findall(r'\w+', url)
+    if tokens:
+        token_lengths = [len(t) for t in tokens]
+        features['avg_word_length'] = np.mean(token_lengths)
+        features['std_word_length'] = np.std(token_lengths)
+    else:
+        features['avg_word_length'] = 0
+        features['std_word_length'] = 0
+    
+    # Hex encoding detection
+    hex_pattern = r'%[0-9A-Fa-f]{2}'
+    hex_matches = re.findall(hex_pattern, url)
+    features['hex_encoding_ratio'] = len(hex_matches) * 3 / len(url) if len(url) > 0 else 0
+    
+    return features
+```
+
+---
+
+#### 6.6.3.4 Binary Flag Features
+
+Binary features indicate presence/absence of specific patterns.
+
+| Feature ID | Feature Name | Condition | Phishing Indicator |
+|------------|--------------|-----------|-------------------|
+| **FLAG-01** | `has_ip_address` | Domain is numeric IP | 1 = suspicious |
+| **FLAG-02** | `is_https` | URL uses HTTPS | 0 = suspicious |
+| **FLAG-03** | `has_at_symbol` | '@' in URL | 1 = suspicious (credential obfuscation) |
+| **FLAG-04** | `has_double_slash_redirect` | '//' in path (not scheme) | 1 = suspicious |
+| **FLAG-05** | `has_prefix_suffix` | '-' in domain name | 1 = suspicious (e.g., paypal-verify) |
+| **FLAG-06** | `uses_shortening_service` | Domain is URL shortener | 1 = suspicious (hides destination) |
+| **FLAG-07** | `suspicious_tld` | TLD in suspicious list | 1 = suspicious |
+| **FLAG-08** | `contains_suspicious_keywords` | 'verify', 'account', 'secure' | 1 = possible social engineering |
+| **FLAG-09** | `abnormal_port` | Non-standard port (not 80/443) | 1 = suspicious |
+| **FLAG-10** | `punycode_encoding` | Contains 'xn--' (IDN) | 1 = possible homograph attack |
+
+---
+
+#### 6.6.3.5 Optional External Features
+
+These features require external API calls or lookups (computationally expensive).
+
+| Feature ID | Feature Name | Data Source | Computation Cost | Implementation Priority |
+|------------|--------------|-------------|------------------|----------------------|
+| **EXT-01** | `domain_age_days` | WHOIS lookup | High (API call) | Low (optional) |
+| **EXT-02** | `domain_registration_length` | WHOIS lookup | High (API call) | Low (optional) |
+| **EXT-03** | `page_rank` | Google PageRank (deprecated) | High | Not recommended |
+| **EXT-04** | `alexa_rank` | Alexa ranking service | Medium (API call) | Low (optional) |
+| **EXT-05** | `dns_record_count` | DNS lookup | Medium | Low (optional) |
+| **EXT-06** | `ssl_certificate_age` | SSL certificate check | Medium (HTTPS request) | Medium |
+| **EXT-07** | `ssl_certificate_issuer` | Certificate authority | Medium | Medium |
+| **EXT-08** | `google_safe_browsing` | Google Safe Browsing API | High (API call) | Low (rate limits) |
+
+**Note**: External features are **NOT RECOMMENDED** for the v1.0 academic project due to:
+- API rate limits and costs
+- Increased latency (violates <200ms requirement)
+- External dependency risks
+- Privacy concerns (sending URLs to third parties)
+
+---
+
+#### 6.6.3.6 Feature Scaling and Normalization
+
+**Requirement**: All features must be scaled to consistent ranges before model training.
+
+**Scaling Methods**:
+
+1. **StandardScaler** (Z-score normalization):
+   ```
+   X_scaled = (X - μ) / σ
+   where μ = mean, σ = standard deviation
+   ```
+   - **Use case**: Features follow normal distribution
+   - **Advantage**: Preserves outlier information
+   - **Disadvantage**: Sensitive to outliers
+
+2. **MinMaxScaler** (Range normalization):
+   ```
+   X_scaled = (X - X_min) / (X_max - X_min)
+   ```
+   - **Use case**: Features should be in [0, 1] range
+   - **Advantage**: Bounded output range
+   - **Disadvantage**: Sensitive to outliers
+
+3. **RobustScaler** (Median-based):
+   ```
+   X_scaled = (X - median) / IQR
+   where IQR = Q3 - Q1 (interquartile range)
+   ```
+   - **Use case**: Features contain outliers
+   - **Advantage**: Robust to outliers
+   - **Disadvantage**: Less interpretable
+
+**Recommendation**: Use **StandardScaler** for most features, **MinMaxScaler** for binary flags (already in [0,1])
+
+**Implementation**:
+```python
+from sklearn.preprocessing import StandardScaler
+import joblib
+
+# Fit scaler on training data
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+
+# Save scaler for deployment
+joblib.dump(scaler, 'models/feature_scaler.joblib')
+
+# In production: load and apply scaler
+scaler = joblib.load('models/feature_scaler.joblib')
+X_new_scaled = scaler.transform(X_new)
+```
+
+---
+
+### 6.6.4 Training Requirements
+
+#### 6.6.4.1 Dataset Requirements
+
+| Requirement | Specification | Rationale |
+|-------------|---------------|-----------|
+| **Minimum Dataset Size** | 50,000 URLs (25k phishing, 25k legitimate) | Sufficient for generalization |
+| **Target Dataset Size** | 100,000+ URLs | Better model robustness |
+| **Class Balance** | 50/50 or 40/60 (phishing/legitimate) | Prevent bias toward majority class |
+| **Data Recency** | URLs from last 6-12 months | Capture current phishing trends |
+| **Data Diversity** | Multiple phishing campaigns and legitimate domains | Prevent overfitting to specific patterns |
+| **Label Quality** | Verified labels from trusted sources | Minimize label noise |
+| **Duplicate Removal** | No duplicate URLs in dataset | Prevent data leakage |
+
+#### Dataset Sources
+
+| Source | Type | Approximate Size | Quality | Access Method |
+|--------|------|------------------|---------|---------------|
+| **PhishTank** | Phishing URLs | 100k+ verified phishing | High (community verified) | Public API / CSV download |
+| **OpenPhish** | Phishing URLs | 50k+ active phishing | High (automated+manual) | Free feed / Premium API |
+| **Alexa Top 1M** | Legitimate URLs | 1M popular sites | High (trusted sites) | Public download |
+| **Common Crawl** | Legitimate URLs | Billions of pages | Medium (sampling needed) | Public S3 bucket |
+| **UCI ML Repository** | Phishing dataset | 11,055 URLs (2016) | Medium (older data) | Public download |
+| **APWG eCrime Exchange** | Phishing feeds | Variable | High | Membership required |
+
+#### Data Split Strategy
+
+```
+Total Dataset (100,000 URLs)
+        │
+        ├── Training Set (70,000 URLs) ────► Model training
+        │      - 35,000 phishing
+        │      - 35,000 legitimate
+        │
+        ├── Validation Set (15,000 URLs) ──► Hyperparameter tuning
+        │      - 7,500 phishing
+        │      - 7,500 legitimate
+        │
+        └── Test Set (15,000 URLs) ────────► Final evaluation
+               - 7,500 phishing
+               - 7,500 legitimate
+
+Stratified Splitting: Maintain class balance across all sets
+```
+
+---
+
+#### 6.6.4.2 Data Preprocessing Pipeline
+
+```python
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+def preprocess_dataset(phishing_urls, legitimate_urls):
+    """
+    Preprocess URL dataset for model training
+    
+    Steps:
+    1. Combine datasets with labels
+    2. Remove duplicates
+    3. Normalize URLs
+    4. Handle missing values
+    5. Validate URL format
+    6. Split into train/val/test
+    """
+    # Combine datasets
+    phishing_df = pd.DataFrame({
+        'url': phishing_urls,
+        'label': 1  # Phishing
+    })
+    legitimate_df = pd.DataFrame({
+        'url': legitimate_urls,
+        'label': 0  # Legitimate
+    })
+    df = pd.concat([phishing_df, legitimate_df], ignore_index=True)
+    
+    # Remove duplicates
+    df = df.drop_duplicates(subset='url')
+    print(f"Dataset size after deduplication: {len(df)}")
+    
+    # URL normalization
+    df['url'] = df['url'].str.lower()
+    df['url'] = df['url'].str.rstrip('/')
+    
+    # Remove malformed URLs
+    df = df[df['url'].str.contains(r'^https?://', regex=True)]
+    
+    # Shuffle dataset
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    
+    # Split dataset: 70-15-15
+    train_df, temp_df = train_test_split(
+        df, test_size=0.3, random_state=42, stratify=df['label']
+    )
+    val_df, test_df = train_test_split(
+        temp_df, test_size=0.5, random_state=42, stratify=temp_df['label']
+    )
+    
+    print(f"Training set: {len(train_df)} URLs")
+    print(f"Validation set: {len(val_df)} URLs")
+    print(f"Test set: {len(test_df)} URLs")
+    
+    return train_df, val_df, test_df
+```
+
+---
+
+#### 6.6.4.3 Class Imbalance Handling
+
+**Problem**: Real-world datasets may have imbalanced classes (e.g., 60% legitimate, 40% phishing)
+
+**Solutions**:
+
+| Technique | Method | Pros | Cons | Recommendation |
+|-----------|--------|------|------|----------------|
+| **SMOTE** | Synthetic Minority Oversampling | Creates realistic synthetic samples | May introduce noise | Use if imbalance >60/40 |
+| **Random Undersampling** | Remove majority class samples | Simple, fast | Loses information | Not recommended |
+| **Random Oversampling** | Duplicate minority samples | Simple | May cause overfitting | Not recommended |
+| **Class Weights** | Adjust loss function | No data modification | Model-dependent | **Recommended** |
+| **Ensemble Methods** | Balanced random forests | Built-in handling | More complex | Good for Random Forest |
+
+**Recommended Approach: Class Weights in XGBoost**
+
+```python
+import xgboost as xgb
+from sklearn.utils.class_weight import compute_sample_weight
+
+# Calculate class weights
+y_train = train_df['label']
+sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
+
+# Or manually:
+n_samples = len(y_train)
+n_positive = sum(y_train == 1)
+n_negative = sum(y_train == 0)
+scale_pos_weight = n_negative / n_positive
+
+# Train with class weights
+model = xgb.XGBClassifier(scale_pos_weight=scale_pos_weight)
+model.fit(X_train, y_train)
+```
+
+---
+
+#### 6.6.4.4 Cross-Validation Strategy
+
+**Requirement**: Use k-fold stratified cross-validation to ensure robust model evaluation.
+
+**Configuration**:
+- **k = 5** (5-fold cross-validation)
+- **Stratified**: Maintain class distribution in each fold
+- **Shuffle**: Randomize data before splitting
+- **Random State**: Set seed for reproducibility
+
+```python
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+# Define cross-validation strategy
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+# Evaluate model with cross-validation
+scores = cross_val_score(
+    model, X_train, y_train,
+    cv=cv,
+    scoring='f1',
+    n_jobs=-1
+)
+
+print(f"Cross-validation F1 scores: {scores}")
+print(f"Mean F1: {scores.mean():.4f} (+/- {scores.std() * 2:.4f})")
+```
+
+---
+
+#### 6.6.4.5 Hyperparameter Optimization
+
+**Method**: Randomized Search followed by Grid Search
+
+**Step 1: Randomized Search (Broad Exploration)**
+```python
+from sklearn.model_selection import RandomizedSearchCV
+import xgboost as xgb
+from scipy.stats import randint, uniform
+
+# Define parameter distributions
+param_dist = {
+    'n_estimators': randint(100, 300),
+    'max_depth': randint(5, 15),
+    'learning_rate': uniform(0.01, 0.2),
+    'subsample': uniform(0.7, 0.3),
+    'colsample_bytree': uniform(0.7, 0.3),
+    'min_child_weight': randint(1, 5),
+    'gamma': uniform(0, 0.2),
+    'reg_alpha': uniform(0, 1),
+    'reg_lambda': randint(1, 3)
+}
+
+# Randomized search
+random_search = RandomizedSearchCV(
+    xgb.XGBClassifier(random_state=42),
+    param_distributions=param_dist,
+    n_iter=50,
+    scoring='f1',
+    cv=5,
+    random_state=42,
+    n_jobs=-1,
+    verbose=2
+)
+
+random_search.fit(X_train, y_train)
+print(f"Best parameters: {random_search.best_params_}")
+print(f"Best F1 score: {random_search.best_score_:.4f}")
+```
+
+**Step 2: Grid Search (Fine-tuning)**
+```python
+from sklearn.model_selection import GridSearchCV
+
+# Define narrow parameter grid around best random search results
+param_grid = {
+    'n_estimators': [180, 200, 220],
+    'max_depth': [6, 7, 8],
+    'learning_rate': [0.08, 0.1, 0.12],
+    'subsample': [0.75, 0.8, 0.85],
+    'colsample_bytree': [0.75, 0.8, 0.85]
+}
+
+grid_search = GridSearchCV(
+    xgb.XGBClassifier(random_state=42),
+    param_grid=param_grid,
+    scoring='f1',
+    cv=5,
+    n_jobs=-1,
+    verbose=2
+)
+
+grid_search.fit(X_train, y_train)
+best_model = grid_search.best_estimator_
+```
+
+---
+
+### 6.6.5 Evaluation Metrics and Acceptance Criteria
+
+#### 6.6.5.1 Primary Metrics
+
+**Confusion Matrix**:
+```
+                  Predicted
+                 Negative  Positive
+Actual Negative    TN        FP
+Actual Positive    FN        TP
+
+Where:
+- TN (True Negative): Correctly classified legitimate URLs
+- FP (False Positive): Legitimate URLs incorrectly flagged as phishing
+- FN (False Negative): Phishing URLs missed by the model
+- TP (True Positive): Correctly detected phishing URLs
+```
+
+---
+
+**Metric 1: Accuracy**
+
+**Definition**: Overall correctness of the model
+
+**Formula**:
+```
+Accuracy = (TP + TN) / (TP + TN + FP + FN)
+```
+
+**Target**: ≥ 95%
+
+**Interpretation**:
+- 95% accuracy means 95 out of 100 URLs are correctly classified
+- Good general metric but can be misleading with imbalanced data
+
+**Python Implementation**:
+```python
+from sklearn.metrics import accuracy_score
+
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.4f}")
+```
+
+---
+
+**Metric 2: Precision**
+
+**Definition**: Of all URLs predicted as phishing, how many are actually phishing?
+
+**Formula**:
+```
+Precision = TP / (TP + FP)
+```
+
+**Target**: ≥ 93%
+
+**Interpretation**:
+- High precision means low false positive rate
+- Critical for user experience (don't block legitimate sites)
+- 93% precision means 7% of blocked sites are false positives
+
+**Python Implementation**:
+```python
+from sklearn.metrics import precision_score
+
+precision = precision_score(y_test, y_pred)
+print(f"Precision: {precision:.4f}")
+```
+
+---
+
+**Metric 3: Recall (Sensitivity, True Positive Rate)**
+
+**Definition**: Of all actual phishing URLs, how many does the model detect?
+
+**Formula**:
+```
+Recall = TP / (TP + FN)
+```
+
+**Target**: ≥ 95%
+
+**Interpretation**:
+- High recall means low false negative rate
+- Critical for security (catch phishing sites)
+- 95% recall means 5% of phishing sites slip through
+
+**Python Implementation**:
+```python
+from sklearn.metrics import recall_score
+
+recall = recall_score(y_test, y_pred)
+print(f"Recall: {recall:.4f}")
+```
+
+---
+
+**Metric 4: F1-Score**
+
+**Definition**: Harmonic mean of precision and recall (balanced metric)
+
+**Formula**:
+```
+F1 = 2 × (Precision × Recall) / (Precision + Recall)
+```
+
+**Target**: ≥ 94%
+
+**Interpretation**:
+- Balances precision and recall
+- Good single metric for model selection
+- More informative than accuracy for imbalanced data
+
+**Python Implementation**:
+```python
+from sklearn.metrics import f1_score
+
+f1 = f1_score(y_test, y_pred)
+print(f"F1-Score: {f1:.4f}")
+```
+
+---
+
+**Metric 5: ROC-AUC (Area Under Receiver Operating Characteristic Curve)**
+
+**Definition**: Measures the model's ability to distinguish between classes across all thresholds
+
+**Formula**:
+```
+AUC = ∫ TPR d(FPR)
+
+where:
+TPR (True Positive Rate) = Recall = TP / (TP + FN)
+FPR (False Positive Rate) = FP / (FP + TN)
+```
+
+**Target**: ≥ 0.97
+
+**Interpretation**:
+- AUC = 1.0: Perfect classifier
+- AUC = 0.5: Random classifier
+- AUC > 0.97: Excellent discrimination
+
+**Python Implementation**:
+```python
+from sklearn.metrics import roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
+
+# Calculate AUC
+y_proba = model.predict_proba(X_test)[:, 1]
+auc = roc_auc_score(y_test, y_proba)
+print(f"ROC-AUC: {auc:.4f}")
+
+# Plot ROC curve
+fpr, tpr, thresholds = roc_curve(y_test, y_proba)
+plt.plot(fpr, tpr, label=f'XGBoost (AUC = {auc:.3f})')
+plt.plot([0, 1], [0, 1], 'k--', label='Random')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve')
+plt.legend()
+plt.savefig('roc_curve.png')
+```
+
+---
+
+#### 6.6.5.2 Evaluation Metrics Summary Table
+
+| Metric | Formula | Target | Priority | Interpretation |
+|--------|---------|--------|----------|----------------|
+| **Accuracy** | (TP+TN)/(TP+TN+FP+FN) | ≥95% | High | Overall correctness |
+| **Precision** | TP/(TP+FP) | ≥93% | Critical | Minimize false alarms |
+| **Recall** | TP/(TP+FN) | ≥95% | Critical | Catch phishing sites |
+| **F1-Score** | 2PR/(P+R) | ≥94% | Critical | Balanced metric |
+| **ROC-AUC** | Area under ROC | ≥0.97 | High | Discrimination ability |
+| **Specificity** | TN/(TN+FP) | ≥93% | Medium | True negative rate |
+| **FPR** | FP/(FP+TN) | ≤7% | High | False positive rate |
+| **FNR** | FN/(FN+TP) | ≤5% | Critical | False negative rate |
+
+**Business Impact**:
+- **False Positives** (FP): Frustrate users, reduce trust, productivity loss
+- **False Negatives** (FN): Security risk, potential data breach, financial loss
+
+**Balanced Trade-off**:
+- Slightly favor **Recall over Precision** (better to warn unnecessarily than miss phishing)
+- Target: Precision ≥93%, Recall ≥95%
+
+---
+
+#### 6.6.5.3 Comprehensive Evaluation Report
+
+```python
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+
+def evaluate_model(model, X_test, y_test):
+    """Generate comprehensive evaluation report"""
+    
+    # Predictions
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
+    
+    # Classification report
+    print("="*60)
+    print("CLASSIFICATION REPORT")
+    print("="*60)
+    print(classification_report(y_test, y_pred, 
+                                target_names=['Legitimate', 'Phishing']))
+    
+    # Confusion matrix
+    cm = confusion_matrix(y_test, y_pred)
+    print("\n" + "="*60)
+    print("CONFUSION MATRIX")
+    print("="*60)
+    print(cm)
+    
+    # Plot confusion matrix
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=['Legitimate', 'Phishing'],
+                yticklabels=['Legitimate', 'Phishing'])
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    plt.title('Confusion Matrix')
+    plt.savefig('confusion_matrix.png')
+    
+    # Calculate metrics
+    tn, fp, fn, tp = cm.ravel()
+    
+    accuracy = (tp + tn) / (tp + tn + fp + fn)
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    f1 = 2 * (precision * recall) / (precision + recall)
+    specificity = tn / (tn + fp)
+    fpr = fp / (fp + tn)
+    fnr = fn / (fn + tp)
+    auc = roc_auc_score(y_test, y_proba)
+    
+    # Print metrics
+    print("\n" + "="*60)
+    print("PERFORMANCE METRICS")
+    print("="*60)
+    print(f"Accuracy:      {accuracy:.4f} (Target: ≥0.9500)")
+    print(f"Precision:     {precision:.4f} (Target: ≥0.9300)")
+    print(f"Recall:        {recall:.4f} (Target: ≥0.9500)")
+    print(f"F1-Score:      {f1:.4f} (Target: ≥0.9400)")
+    print(f"Specificity:   {specificity:.4f}")
+    print(f"ROC-AUC:       {auc:.4f} (Target: ≥0.9700)")
+    print(f"FPR:           {fpr:.4f} (Target: ≤0.0700)")
+    print(f"FNR:           {fnr:.4f} (Target: ≤0.0500)")
+    
+    # Acceptance criteria check
+    print("\n" + "="*60)
+    print("ACCEPTANCE CRITERIA")
+    print("="*60)
+    print(f"✓ Accuracy ≥ 95%:    {'PASS' if accuracy >= 0.95 else 'FAIL'}")
+    print(f"✓ Precision ≥ 93%:   {'PASS' if precision >= 0.93 else 'FAIL'}")
+    print(f"✓ Recall ≥ 95%:      {'PASS' if recall >= 0.95 else 'FAIL'}")
+    print(f"✓ F1-Score ≥ 94%:    {'PASS' if f1 >= 0.94 else 'FAIL'}")
+    print(f"✓ ROC-AUC ≥ 0.97:    {'PASS' if auc >= 0.97 else 'FAIL'}")
+    
+    return {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
+        'auc': auc
+    }
+```
+
+---
+
+### 6.6.6 Model Explainability Requirements
+
+Model explainability is critical for debugging, trust, and regulatory compliance.
+
+#### 6.6.6.1 Feature Importance Analysis
+
+**Requirement**: Identify which features contribute most to predictions.
+
+**Method 1: XGBoost Built-in Feature Importance**
+
+```python
+import matplotlib.pyplot as plt
+
+# Get feature importance
+feature_importance = model.get_booster().get_score(importance_type='gain')
+
+# Sort by importance
+sorted_features = sorted(feature_importance.items(), 
+                        key=lambda x: x[1], reverse=True)
+
+# Plot top 20 features
+features = [f[0] for f in sorted_features[:20]]
+scores = [f[1] for f in sorted_features[:20]]
+
+plt.figure(figsize=(10, 8))
+plt.barh(features, scores)
+plt.xlabel('Importance Score (Gain)')
+plt.title('Top 20 Most Important Features')
+plt.gca().invert_yaxis()
+plt.tight_layout()
+plt.savefig('feature_importance.png')
+```
+
+**Importance Types**:
+- **gain**: Average gain across all splits using the feature
+- **weight**: Number of times feature is used in trees
+- **cover**: Average coverage (number of samples affected)
+
+---
+
+**Method 2: SHAP (SHapley Additive exPlanations)**
+
+**Requirement**: Provide instance-level explanations for individual predictions.
+
+**SHAP Overview**:
+- Based on game theory (Shapley values)
+- Explains each prediction by attributing contribution to each feature
+- Model-agnostic but optimized for tree-based models
+
+**Implementation**:
+```python
+import shap
+
+# Create SHAP explainer
+explainer = shap.TreeExplainer(model)
+
+# Calculate SHAP values for test set
+shap_values = explainer.shap_values(X_test)
+
+# Summary plot (global feature importance)
+shap.summary_plot(shap_values, X_test, 
+                  feature_names=feature_names,
+                  max_display=20,
+                  show=False)
+plt.savefig('shap_summary.png', bbox_inches='tight')
+
+# Force plot (individual prediction explanation)
+shap.initjs()
+shap.force_plot(explainer.expected_value, 
+                shap_values[0], 
+                X_test.iloc[0],
+                feature_names=feature_names)
+```
+
+**SHAP Visualizations**:
+
+1. **Summary Plot**: Shows feature importance and impact distribution
+2. **Force Plot**: Explains individual prediction (feature contributions)
+3. **Waterfall Plot**: Shows cumulative feature contributions
+4. **Dependence Plot**: Shows relationship between feature value and SHAP value
+
+**Example Interpretation**:
+```
+URL: https://secure-login.paypal-verify.tk/signin
+Prediction: Phishing (Confidence: 0.94)
+
+Top Contributing Features:
+1. suspicious_tld (+0.45)        ← .tk domain is highly suspicious
+2. domain_length (+0.22)         ← Long domain name
+3. num_hyphens (+0.18)           ← Multiple hyphens in domain
+4. contains_brand_name (+0.15)   ← "paypal" in suspicious context
+5. subdomain_depth (+0.12)       ← Deep subdomain nesting
+```
+
+---
+
+#### 6.6.6.2 Error Analysis
+
+**Requirement**: Analyze misclassified examples to improve model.
+
+```python
+def analyze_errors(model, X_test, y_test, feature_names):
+    """Analyze false positives and false negatives"""
+    
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
+    
+    # False positives (legitimate flagged as phishing)
+    fp_indices = (y_pred == 1) & (y_test == 0)
+    false_positives = X_test[fp_indices]
+    fp_confidence = y_proba[fp_indices]
+    
+    print("="*60)
+    print(f"FALSE POSITIVES: {len(false_positives)} cases")
+    print("="*60)
+    
+    for i, (idx, conf) in enumerate(zip(false_positives.index[:5], fp_confidence[:5])):
+        url = test_df.loc[idx, 'url']
+        print(f"\n{i+1}. URL: {url}")
+        print(f"   Confidence: {conf:.3f}")
+        print(f"   Top features:")
+        for feat, val in X_test.loc[idx].nlargest(5).items():
+            print(f"     - {feat}: {val:.3f}")
+    
+    # False negatives (phishing missed)
+    fn_indices = (y_pred == 0) & (y_test == 1)
+    false_negatives = X_test[fn_indices]
+    fn_confidence = 1 - y_proba[fn_indices]
+    
+    print("\n" + "="*60)
+    print(f"FALSE NEGATIVES: {len(false_negatives)} cases")
+    print("="*60)
+    
+    for i, (idx, conf) in enumerate(zip(false_negatives.index[:5], fn_confidence[:5])):
+        url = test_df.loc[idx, 'url']
+        print(f"\n{i+1}. URL: {url}")
+        print(f"   Confidence (legitimate): {conf:.3f}")
+        print(f"   Why missed: Likely has legitimate-looking features")
+```
+
+---
+
+### 6.6.7 Model Persistence and Loading Strategy
+
+#### 6.6.7.1 Model Serialization Requirements
+
+**Requirement**: Trained models must be saved efficiently for deployment.
+
+**Serialization Format**: **Joblib** (recommended for scikit-learn/XGBoost)
+
+**Alternative**: Pickle (Python standard library, less efficient for large arrays)
+
+**Files to Serialize**:
+1. Trained model object
+2. Feature scaler
+3. Feature names (ordered list)
+4. Model metadata (version, metrics, training date)
+
+---
+
+#### 6.6.7.2 Model Saving Implementation
+
+```python
+import joblib
+import json
+from datetime import datetime
+
+def save_model_artifacts(model, scaler, feature_names, metrics, version='v1.0'):
+    """
+    Save all model artifacts for deployment
+    
+    Args:
+        model: Trained XGBoost model
+        scaler: Fitted StandardScaler
+        feature_names: List of feature names (in order)
+        metrics: Dictionary of evaluation metrics
+        version: Model version string
+    """
+    
+    # Create models directory
+    import os
+    os.makedirs('models', exist_ok=True)
+    
+    # Save model
+    model_path = f'models/xgboost_{version}.pkl'
+    joblib.dump(model, model_path)
+    print(f"Model saved: {model_path}")
+    
+    # Save scaler
+    scaler_path = f'models/scaler_{version}.joblib'
+    joblib.dump(scaler, scaler_path)
+    print(f"Scaler saved: {scaler_path}")
+    
+    # Save feature names
+    features_path = f'models/features_{version}.json'
+    with open(features_path, 'w') as f:
+        json.dump({'features': feature_names}, f, indent=2)
+    print(f"Features saved: {features_path}")
+    
+    # Save metadata
+    metadata = {
+        'version': version,
+        'training_date': datetime.now().isoformat(),
+        'model_type': 'XGBoost',
+        'num_features': len(feature_names),
+        'metrics': {
+            'accuracy': float(metrics['accuracy']),
+            'precision': float(metrics['precision']),
+            'recall': float(metrics['recall']),
+            'f1_score': float(metrics['f1']),
+            'roc_auc': float(metrics['auc'])
+        },
+        'hyperparameters': model.get_params(),
+        'feature_names': feature_names
+    }
+    
+    metadata_path = f'models/metadata_{version}.json'
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    print(f"Metadata saved: {metadata_path}")
+    
+    # File size report
+    model_size_mb = os.path.getsize(model_path) / (1024 * 1024)
+    print(f"\nModel size: {model_size_mb:.2f} MB")
+```
+
+---
+
+#### 6.6.7.3 Model Loading Implementation
+
+```python
+def load_model_artifacts(version='v1.0'):
+    """
+    Load all model artifacts for inference
+    
+    Returns:
+        Dictionary containing model, scaler, features, metadata
+    """
+    
+    # Load model
+    model_path = f'models/xgboost_{version}.pkl'
+    model = joblib.load(model_path)
+    print(f"Model loaded: {model_path}")
+    
+    # Load scaler
+    scaler_path = f'models/scaler_{version}.joblib'
+    scaler = joblib.load(scaler_path)
+    print(f"Scaler loaded: {scaler_path}")
+    
+    # Load feature names
+    features_path = f'models/features_{version}.json'
+    with open(features_path, 'r') as f:
+        feature_data = json.load(f)
+        feature_names = feature_data['features']
+    print(f"Features loaded: {len(feature_names)} features")
+    
+    # Load metadata
+    metadata_path = f'models/metadata_{version}.json'
+    with open(metadata_path, 'r') as f:
+        metadata = json.load(f)
+    print(f"Metadata loaded: {metadata_path}")
+    print(f"Model metrics: Accuracy={metadata['metrics']['accuracy']:.4f}, "
+          f"F1={metadata['metrics']['f1_score']:.4f}")
+    
+    return {
+        'model': model,
+        'scaler': scaler,
+        'feature_names': feature_names,
+        'metadata': metadata
+    }
+```
+
+---
+
+#### 6.6.7.4 Model Versioning Strategy
+
+**Versioning Scheme**: Semantic Versioning (MAJOR.MINOR.PATCH)
+
+- **MAJOR**: Breaking changes (different feature set, algorithm change)
+- **MINOR**: Backward-compatible improvements (retrained model, hyperparameter tuning)
+- **PATCH**: Bug fixes (no model change)
+
+**Example Versions**:
+- `v1.0.0`: Initial production model
+- `v1.1.0`: Retrained with more data (same features)
+- `v1.2.0`: Improved hyperparameters
+- `v2.0.0`: New feature set or algorithm
+
+**Version Storage Structure**:
+```
+models/
+├── v1.0/
+│   ├── xgboost_v1.0.pkl
+│   ├── scaler_v1.0.joblib
+│   ├── features_v1.0.json
+│   └── metadata_v1.0.json
+├── v1.1/
+│   ├── xgboost_v1.1.pkl
+│   ├── scaler_v1.1.joblib
+│   ├── features_v1.1.json
+│   └── metadata_v1.1.json
+└── current -> v1.1/  (symlink to active version)
+```
+
+---
+
+#### 6.6.7.5 Model Validation on Load
+
+**Requirement**: Verify model integrity when loading.
+
+```python
+import hashlib
+
+def validate_model(model_path, expected_checksum=None):
+    """
+    Validate model file integrity
+    
+    Args:
+        model_path: Path to model file
+        expected_checksum: Optional SHA256 checksum
+    
+    Returns:
+        Boolean indicating if model is valid
+    """
+    
+    # Check file exists
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    
+    # Verify checksum if provided
+    if expected_checksum:
+        with open(model_path, 'rb') as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+        
+        if file_hash != expected_checksum:
+            raise ValueError(f"Model checksum mismatch. "
+                           f"Expected: {expected_checksum}, Got: {file_hash}")
+    
+    # Try loading model
+    try:
+        model = joblib.load(model_path)
+    except Exception as e:
+        raise RuntimeError(f"Failed to load model: {e}")
+    
+    # Verify model has required methods
+    if not hasattr(model, 'predict') or not hasattr(model, 'predict_proba'):
+        raise ValueError("Loaded object is not a valid classifier")
+    
+    print(f"✓ Model validation passed: {model_path}")
+    return True
+```
+
+---
+
+#### 6.6.7.6 Production Model Loading (FastAPI Integration)
+
+```python
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+# Global model storage
+ml_models = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load model on startup, cleanup on shutdown"""
+    
+    # Startup: Load model
+    print("Loading ML model...")
+    try:
+        artifacts = load_model_artifacts(version='v1.0')
+        ml_models['model'] = artifacts['model']
+        ml_models['scaler'] = artifacts['scaler']
+        ml_models['feature_names'] = artifacts['feature_names']
+        ml_models['metadata'] = artifacts['metadata']
+        print("✓ Model loaded successfully")
+    except Exception as e:
+        print(f"✗ Failed to load model: {e}")
+        raise
+    
+    yield  # Application runs
+    
+    # Shutdown: Cleanup
+    ml_models.clear()
+    print("Model unloaded")
+
+app = FastAPI(lifespan=lifespan)
+
+# Access model in endpoints
+@app.post("/predict")
+async def predict(request: URLRequest):
+    model = ml_models['model']
+    scaler = ml_models['scaler']
+    # ... inference logic
+```
+
+---
+
+### 6.6.8 Model Retraining Strategy
+
+**Requirement**: Define process for periodic model updates.
+
+**Retraining Triggers**:
+1. **Performance Degradation**: Accuracy drops below 94%
+2. **Time-Based**: Every 3-6 months to capture new phishing trends
+3. **Data-Based**: New dataset with 10,000+ labeled URLs
+4. **Feedback-Based**: 1,000+ user-reported false positives/negatives
+
+**Retraining Pipeline**:
+```
+[1] Collect new data (phishing feeds, feedback)
+[2] Merge with existing training data
+[3] Preprocess and validate data quality
+[4] Retrain model with updated dataset
+[5] Evaluate on holdout test set
+[6] Compare metrics with current production model
+[7] If improved: Deploy new model
+[8] If not: Analyze and iterate
+```
+
+---
+
+## 6.7 Frontend Requirements Specification (Chrome Extension)
+
+### 6.7.1 Frontend Overview
+
+The frontend component is a Chrome browser extension built using Manifest V3, providing real-time phishing detection directly in the user's browsing experience. The extension acts as a lightweight client that intercepts navigation events, communicates with the backend API, and displays security warnings when necessary.
+
+#### Technology Stack
+
+| Component | Technology | Version | Purpose |
+|-----------|-----------|---------|---------|
+| **Extension Platform** | Chrome Extension API | Manifest V3 | Browser extension framework |
+| **Programming Language** | JavaScript | ES6+ | Core extension logic |
+| **Markup** | HTML5 | - | UI structure (popup, warning pages) |
+| **Styling** | CSS3 | - | UI styling and animations |
+| **Storage** | chrome.storage.local | Native API | Local data persistence |
+| **Navigation** | chrome.webNavigation | Native API | URL interception |
+| **HTTP Client** | Fetch API | Native | Backend API communication |
+| **Async Operations** | Promises/Async-Await | ES6+ | Asynchronous programming |
+| **Build Tools** | None (vanilla JS) | - | Simplicity for academic project |
+
+#### Extension Architecture
+
+```
+Chrome Browser Process
+├── Background Service Worker (persistent)
+│   ├── Navigation event listeners
+│   ├── API communication manager
+│   ├── Cache management
+│   └── Message routing
+│
+├── Content Scripts (injected per page)
+│   ├── Warning banner injection
+│   ├── DOM manipulation
+│   └── User interaction handling
+│
+├── Popup Interface (on-demand)
+│   ├── Statistics display
+│   ├── Settings management
+│   └── Whitelist editor
+│
+└── Warning Page (full page)
+    ├── Phishing alert display
+    ├── User decision interface
+    └── Feedback collection
+```
+
+#### File Structure
+
+```
+chrome-extension/
+├── manifest.json                # Extension configuration
+├── background.js                # Service worker (main logic)
+├── content-script.js            # Injected page scripts
+├── popup/
+│   ├── popup.html              # Popup interface
+│   ├── popup.js                # Popup logic
+│   └── popup.css               # Popup styling
+├── warning/
+│   ├── warning.html            # Full-page warning
+│   ├── warning.js              # Warning page logic
+│   └── warning.css             # Warning page styling
+├── settings/
+│   ├── settings.html           # Settings page
+│   ├── settings.js             # Settings logic
+│   └── settings.css            # Settings styling
+├── assets/
+│   ├── icon-16.png            # Extension icon (16x16)
+│   ├── icon-48.png            # Extension icon (48x48)
+│   ├── icon-128.png           # Extension icon (128x128)
+│   ├── shield.svg             # Security shield icon
+│   └── warning.svg            # Warning icon
+├── utils/
+│   ├── api-client.js          # Backend API wrapper
+│   ├── cache-manager.js       # Local cache operations
+│   └── constants.js           # Shared constants
+└── README.md                   # Development documentation
+```
+
+---
+
+### 6.7.2 User Flow Diagrams
+
+#### 6.7.2.1 Primary User Flow: URL Navigation
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  USER ACTION: Navigates to URL (clicks link, types address)    │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  EXTENSION: Background script intercepts navigation event       │
+│  chrome.webNavigation.onBeforeNavigate                          │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+                    ┌───────┴───────┐
+                    │  Is main frame? │ ──No──→ [Allow navigation]
+                    └───────┬───────┘
+                          Yes
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  CHECK 1: Is URL whitelisted?                                   │
+│  (User-added trusted domains)                                   │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+                    ┌───────┴───────┐
+                    │  Whitelisted?   │ ──Yes──→ [Allow navigation]
+                    └───────┬───────┘
+                          No
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  CHECK 2: Is result cached?                                     │
+│  (Check local storage for recent classification)                │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+                    ┌───────┴───────┐
+                    │  Cache hit?     │ ──Yes──→ [Use cached result]
+                    └───────┬───────┘              ↓
+                          No                       └─────┐
+                            ↓                            │
+┌─────────────────────────────────────────────────────────────────┐
+│  API CALL: Send URL to backend /predict endpoint                │
+│  POST /predict { "url": "..." }                                 │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+                    ┌───────┴───────┐
+                    │  API Success?   │ ──No──→ [Handle error, allow with warning]
+                    └───────┬───────┘
+                          Yes
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  CACHE: Store result locally (24hr TTL)                         │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  DECISION: Determine action based on risk level                 │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓
+            ┌───────────────┴───────────────┐
+            ↓                               ↓
+    ┌──────────────┐              ┌──────────────┐
+    │ HIGH RISK    │              │ MEDIUM RISK  │
+    │ (conf≥80%)   │              │ (60-79%)     │
+    └──────┬───────┘              └──────┬───────┘
+           ↓                              ↓
+┌──────────────────────┐      ┌──────────────────────┐
+│ Block navigation     │      │ Allow with banner    │
+│ Redirect to warning  │      │ Inject warning banner│
+│ page                 │      │ into page            │
+└──────────────────────┘      └──────────────────────┘
+           ↓                              ↓
+  ┌────────────────┐            ┌────────────────┐
+  │ User sees full │            │ User sees      │
+  │ page warning   │            │ top banner     │
+  └────────┬───────┘            └────────┬───────┘
+           ↓                              ↓
+    ┌─────┴─────┐                  ┌─────┴─────┐
+    │ Go Back   │                  │ Continue  │
+    │ (default) │                  │ Browsing  │
+    └───────────┘                  └───────────┘
+           ↓
+    ┌─────┴─────┐
+    │ Continue  │
+    │ Anyway    │
+    │ (override)│
+    └───────────┘
+```
+
+#### 6.7.2.2 User Flow: Extension Popup Interaction
+
+```
+USER: Clicks extension icon in toolbar
+              ↓
+┌─────────────────────────────────┐
+│ Display popup.html              │
+│ - Load statistics from storage  │
+│ - Get current tab URL           │
+│ - Check protection status       │
+└─────────────────────────────────┘
+              ↓
+┌─────────────────────────────────┐
+│ Popup Interface Displayed       │
+│ ┌─────────────────────────────┐ │
+│ │ Phishing Detector    ⚙️     │ │
+│ ├─────────────────────────────┤ │
+│ │ 🛡️ Protection: ON           │ │
+│ │                             │ │
+│ │ Today's Statistics:         │ │
+│ │ ✓ URLs Checked: 127         │ │
+│ │ ⚠️ Threats Blocked: 3       │ │
+│ │ ℹ️ Warnings: 8              │ │
+│ │                             │ │
+│ │ Current Tab: ✓ Safe         │ │
+│ │ example.com                 │ │
+│ │                             │ │
+│ │ [Whitelist Manager]         │ │
+│ │ [Settings]                  │ │
+│ └─────────────────────────────┘ │
+└─────────────────────────────────┘
+              ↓
+      ┌───────┴────────┐
+      │ User Action?    │
+      └───────┬────────┘
+              ↓
+    ┌─────────┼─────────────┐
+    ↓         ↓             ↓
+[Toggle   [Whitelist]  [Settings]
+ Protection]
+    ↓         ↓             ↓
+ Update    Open          Open
+ Setting   Whitelist     Settings
+           Manager       Page
+```
+
+#### 6.7.2.3 User Flow: Whitelist Management
+
+```
+USER: Wants to trust a site flagged as phishing
+              ↓
+      ┌───────┴────────┐
+      │ Entry Point?    │
+      └───────┬────────┘
+              ↓
+    ┌─────────┼─────────────┐
+    ↓                       ↓
+[Warning Page]         [Popup Menu]
+"Trust this site"      "Whitelist Manager"
+    ↓                       ↓
+    └───────────┬───────────┘
+                ↓
+┌─────────────────────────────────┐
+│ Extract domain from URL         │
+│ example.com                     │
+└─────────────────────────────────┘
+                ↓
+┌─────────────────────────────────┐
+│ Show confirmation dialog        │
+│ "Add example.com to whitelist?"│
+└─────────────────────────────────┘
+                ↓
+        ┌───────┴────────┐
+        │ User confirms?  │
+        └───────┬────────┘
+               Yes
+                ↓
+┌─────────────────────────────────┐
+│ Add domain to whitelist         │
+│ Save to chrome.storage.local    │
+└─────────────────────────────────┘
+                ↓
+┌─────────────────────────────────┐
+│ Show success notification       │
+│ "example.com added to whitelist"│
+└─────────────────────────────────┘
+                ↓
+┌─────────────────────────────────┐
+│ Remove warning/allow navigation │
+└─────────────────────────────────┘
+```
+
+---
+
+### 6.7.3 Functional Requirements
+
+#### 6.7.3.1 Core Detection Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-F01** | URL Interception | Critical | Extension shall intercept all navigation events before page load | Navigation events captured with <10ms overhead |
+| **FR-F02** | Main Frame Detection | Critical | Extension shall only process main frame navigations, not iframes | Sub-frames ignored to prevent excessive API calls |
+| **FR-F03** | Whitelist Check | Critical | Extension shall check URLs against user whitelist before API call | Whitelisted domains bypass all checks instantly |
+| **FR-F04** | Cache Lookup | High | Extension shall check local cache for recent classifications | Cache lookup completes in <5ms |
+| **FR-F05** | API Communication | Critical | Extension shall send URL to backend API when no cache hit | API call made within 50ms of navigation event |
+| **FR-F06** | Response Parsing | Critical | Extension shall correctly parse API response (prediction, confidence) | All response fields extracted without errors |
+| **FR-F07** | Risk Categorization | Critical | Extension shall determine action based on confidence threshold | High (≥80%), Medium (60-79%), Low (<60%) |
+| **FR-F08** | Navigation Blocking | Critical | Extension shall block navigation to high-risk URLs | Page load prevented until user override |
+| **FR-F09** | Warning Display | Critical | Extension shall display appropriate warnings based on risk level | Full-page for high risk, banner for medium risk |
+| **FR-F10** | User Override | High | Users shall be able to proceed to blocked sites after warning | "Continue Anyway" button functional |
+
+#### 6.7.3.2 User Interface Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-F11** | Extension Icon | High | Extension icon shall be visible in Chrome toolbar | Icon displayed in all browser windows |
+| **FR-F12** | Popup Display | High | Clicking icon shall open popup with statistics and controls | Popup appears within 100ms of click |
+| **FR-F13** | Statistics Tracking | Medium | Extension shall track and display URLs checked, threats blocked | Statistics persist across sessions |
+| **FR-F14** | Current Tab Status | Medium | Popup shall show safety status of current tab | Real-time status indicator |
+| **FR-F15** | Settings Access | Medium | Popup shall provide access to settings page | Settings page opens in new tab |
+| **FR-F16** | Warning Page Design | Critical | Full-page warning shall be clear and professional | Meets WCAG 2.1 accessibility standards |
+| **FR-F17** | Banner Injection | High | Medium-risk warnings shall appear as non-intrusive banner | Banner at top of page, easily dismissible |
+| **FR-F18** | Action Buttons | Critical | All user actions shall have clearly labeled buttons | Button text unambiguous (e.g., "Go Back to Safety") |
+| **FR-F19** | Visual Feedback | Medium | Extension shall provide visual feedback for all actions | Loading spinners, success/error messages |
+| **FR-F20** | Responsive Design | Low | UI shall adapt to different window sizes | Popup usable from 300px width |
+
+#### 6.7.3.3 Cache Management Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-F21** | Cache Storage | High | Extension shall cache URL classifications locally | Cached entries stored in chrome.storage.local |
+| **FR-F22** | Cache TTL | High | Cached entries shall expire after 24 hours | Entries automatically invalidated after TTL |
+| **FR-F23** | Cache Size Limit | Medium | Cache shall not exceed 5MB storage | Old entries purged when limit approached |
+| **FR-F24** | Cache Lookup Speed | High | Cache lookups shall complete in <5ms | No noticeable delay in navigation |
+| **FR-F25** | Cache Invalidation | Medium | Users shall be able to manually clear cache | "Clear Cache" button in settings |
+| **FR-F26** | URL Hashing | High | URLs shall be hashed before caching (privacy) | SHA-256 hash used, not full URL |
+| **FR-F27** | Cache Persistence | Medium | Cache shall persist across browser restarts | Storage survives extension updates |
+| **FR-F28** | Cache Statistics | Low | Extension shall track cache hit rate | Hit rate displayed in settings (optional) |
+
+#### 6.7.3.4 Whitelist Management Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-F29** | Whitelist Storage | Critical | Extension shall maintain list of trusted domains | Whitelist persists in chrome.storage.local |
+| **FR-F30** | Add to Whitelist | High | Users shall be able to add domains to whitelist | "Trust This Site" button on warning page |
+| **FR-F31** | Remove from Whitelist | Medium | Users shall be able to remove domains from whitelist | Whitelist manager UI with delete buttons |
+| **FR-F32** | Whitelist UI | Medium | Popup shall provide access to whitelist manager | List of whitelisted domains with actions |
+| **FR-F33** | Domain Extraction | High | Extension shall extract root domain from URLs | `subdomain.example.com` → `example.com` |
+| **FR-F34** | Subdomain Handling | Medium | Whitelist shall apply to all subdomains | `example.com` whitelist includes `www.example.com` |
+| **FR-F35** | Import/Export | Low | Users shall be able to import/export whitelist | JSON export/import functionality |
+| **FR-F36** | Whitelist Validation | Medium | Extension shall validate domains before adding | Invalid domains rejected with error message |
+
+#### 6.7.3.5 Settings Management Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-F37** | Protection Toggle | High | Users shall be able to enable/disable protection | Toggle in popup updates immediately |
+| **FR-F38** | Sensitivity Settings | Medium | Users shall be able to adjust detection sensitivity | Low/Medium/High options (adjusts thresholds) |
+| **FR-F39** | Notification Settings | Low | Users shall be able to enable/disable notifications | Chrome notification preferences |
+| **FR-F40** | API Endpoint Config | Low | Users shall be able to change API endpoint (for self-hosting) | Custom URL input in advanced settings |
+| **FR-F41** | Default Settings | High | Extension shall have sensible defaults on first install | Protection ON, Medium sensitivity |
+| **FR-F42** | Settings Persistence | High | Settings shall persist across browser restarts | Stored in chrome.storage.sync |
+| **FR-F43** | Settings Export | Low | Users shall be able to export settings | JSON export for backup |
+| **FR-F44** | Settings Reset | Low | Users shall be able to reset to defaults | "Reset to Default" button |
+
+#### 6.7.3.6 Error Handling Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-F45** | Network Error Handling | Critical | Extension shall handle API unavailability gracefully | Allow navigation with warning banner |
+| **FR-F46** | Timeout Handling | High | Extension shall timeout API calls after 5 seconds | Navigation not blocked indefinitely |
+| **FR-F47** | Invalid Response Handling | High | Extension shall handle malformed API responses | Error logged, user allowed to proceed |
+| **FR-F48** | Rate Limit Handling | Medium | Extension shall detect and handle 429 responses | Show "Service busy" message, use cache |
+| **FR-F49** | Error Notifications | Medium | Extension shall notify users of errors | Non-intrusive error messages |
+| **FR-F50** | Offline Mode | Medium | Extension shall function in degraded mode when offline | Use cached results, whitelist only |
+| **FR-F51** | Error Logging | Low | Extension shall log errors for debugging | Console.log with structured format |
+| **FR-F52** | Retry Logic | Medium | Extension shall retry failed API calls once | Exponential backoff before retry |
+
+#### 6.7.3.7 Performance Requirements
+
+| ID | Requirement | Priority | Description | Acceptance Criteria |
+|----|-------------|----------|-------------|---------------------|
+| **FR-F53** | Load Time Impact | Critical | Extension shall not noticeably slow page loads | <100ms overhead for legitimate sites |
+| **FR-F54** | Memory Usage | High | Extension shall use <50MB RAM | Memory measured via Chrome Task Manager |
+| **FR-F55** | CPU Usage | Medium | Extension shall use minimal CPU when idle | <1% CPU when not processing requests |
+| **FR-F56** | Storage Usage | Medium | Extension shall use <10MB disk space | Includes cache, settings, whitelist |
+| **FR-F57** | Popup Load Time | High | Popup shall open in <100ms | Measured from click to display |
+| **FR-F58** | API Call Optimization | High | Extension shall minimize redundant API calls | Cache hit rate >80% for repeat visits |
+| **FR-F59** | Background Worker | High | Service worker shall not impact browser performance | No memory leaks, efficient event handling |
+| **FR-F60** | Batch Operations | Low | Extension shall batch multiple operations when possible | e.g., batch cache cleanup |
+
+---
+
+### 6.7.4 UI/UX Requirements
+
+#### 6.7.4.1 Design Principles
+
+| Principle | Description | Implementation |
+|-----------|-------------|----------------|
+| **Clarity** | Information should be immediately understandable | Clear language, no jargon, prominent headings |
+| **Safety-First** | Default actions should prioritize user security | "Go Back" as primary button, "Continue" as secondary |
+| **Non-Intrusive** | Warnings should not disrupt legitimate browsing | Medium-risk sites use subtle banners |
+| **Accessibility** | UI should be usable by all users | WCAG 2.1 AA compliance, keyboard navigation |
+| **Consistency** | Design patterns consistent across all screens | Uniform color scheme, typography, button styles |
+| **Performance** | UI should respond instantly to user actions | <100ms response time for all interactions |
+
+#### 6.7.4.2 Color Scheme
+
+| Color | Hex Code | Usage | Meaning |
+|-------|----------|-------|---------|
+| **Primary (Blue)** | `#2563EB` | Extension icon, primary actions | Trust, security |
+| **Success (Green)** | `#10B981` | Safe status indicators, success messages | Safe, legitimate |
+| **Warning (Yellow)** | `#F59E0B` | Medium-risk warnings, cautionary messages | Caution, attention |
+| **Danger (Red)** | `#DC2626` | High-risk warnings, error messages | Danger, threat |
+| **Neutral (Gray)** | `#6B7280` | Secondary text, borders, disabled states | Neutral, inactive |
+| **Background** | `#FFFFFF` | Page backgrounds, popup background | Clean, professional |
+| **Text** | `#1F2937` | Primary text color | Readable, high contrast |
+
+**Accessibility Requirements**:
+- All color combinations must meet WCAG 2.1 AA contrast ratio (4.5:1 for normal text)
+- Color should not be the only means of conveying information (use icons + text)
+
+#### 6.7.4.3 Typography
+
+| Element | Font | Size | Weight | Usage |
+|---------|------|------|--------|-------|
+| **Heading 1** | System font stack | 24px | 700 (Bold) | Page titles |
+| **Heading 2** | System font stack | 20px | 600 (Semi-bold) | Section headers |
+| **Heading 3** | System font stack | 18px | 600 (Semi-bold) | Sub-sections |
+| **Body Text** | System font stack | 14px | 400 (Regular) | General content |
+| **Small Text** | System font stack | 12px | 400 (Regular) | Captions, metadata |
+| **Button Text** | System font stack | 14px | 600 (Semi-bold) | Action buttons |
+| **Monospace** | Consolas, Monaco | 13px | 400 (Regular) | URLs, code |
+
+**System Font Stack**:
+```css
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 
+             "Helvetica Neue", Arial, sans-serif;
+```
+
+#### 6.7.4.4 Extension Popup UI Specification
+
+**Dimensions**: 320px width × 480px height
+
+**Layout Structure**:
+```
+┌─────────────────────────────────────────┐
+│ Header (60px)                           │
+│ ┌─────────┐  Phishing Detector   ⚙️    │
+│ │ 🛡️ Icon │                             │
+│ └─────────┘                             │
+├─────────────────────────────────────────┤
+│ Protection Status (80px)                │
+│ ┌─────────────────────────────────────┐ │
+│ │ 🛡️ Protection: ON    [Toggle]       │ │
+│ │ Real-time phishing detection active │ │
+│ └─────────────────────────────────────┘ │
+├─────────────────────────────────────────┤
+│ Statistics Section (120px)              │
+│ Today's Activity:                       │
+│ ✓ URLs Checked: 127                     │
+│ ⚠️ Threats Blocked: 3                    │
+│ ℹ️ Warnings Shown: 8                     │
+│ 📊 Cache Hit Rate: 84%                   │
+├─────────────────────────────────────────┤
+│ Current Tab Status (100px)              │
+│ ┌─────────────────────────────────────┐ │
+│ │ Current Page:                       │ │
+│ │ ✓ Safe                              │ │
+│ │ https://example.com                 │ │
+│ │ Last checked: 2 minutes ago         │ │
+│ └─────────────────────────────────────┘ │
+├─────────────────────────────────────────┤
+│ Quick Actions (100px)                   │
+│ [📋 Whitelist Manager]                  │
+│ [🔧 Settings]                           │
+│ [🗑️ Clear Cache]                        │
+├─────────────────────────────────────────┤
+│ Footer (40px)                           │
+│ Version 1.0 | Report Issue              │
+└─────────────────────────────────────────┘
+```
+
+**Interactive Elements**:
+- **Protection Toggle**: Switch component (ON/OFF)
+- **Statistics**: Display-only, updates in real-time
+- **Quick Action Buttons**: Hover effect, click to navigate
+- **Settings Icon**: Opens settings in new tab
+
+#### 6.7.4.5 Warning Page UI Specification
+
+**Full-Page Warning (High Risk)**:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│                         🛡️                              │
+│                                                         │
+│              PHISHING THREAT DETECTED                   │
+│                                                         │
+│   This site has been identified as a phishing attempt  │
+│   and may steal your personal information.              │
+│                                                         │
+│   ┌───────────────────────────────────────────────┐   │
+│   │ Suspicious URL:                               │   │
+│   │ https://secure-login.paypal-verify.tk/signin  │   │
+│   │                                               │   │
+│   │ Detection Confidence: 94%                     │   │
+│   │ Risk Level: HIGH                              │   │
+│   └───────────────────────────────────────────────┘   │
+│                                                         │
+│   ┌───────────────────────────────────────────────┐   │
+│   │ Why is this dangerous?                        │   │
+│   │                                               │   │
+│   │ • Domain uses suspicious TLD (.tk)            │   │
+│   │ • Contains brand name in subdomain            │   │
+│   │ • Multiple hyphens in domain name             │   │
+│   │ • No HTTPS encryption                         │   │
+│   └───────────────────────────────────────────────┘   │
+│                                                         │
+│           ┌──────────────────────────────┐            │
+│           │   ← Go Back to Safety        │            │
+│           │      (Recommended)           │            │
+│           └──────────────────────────────┘            │
+│                                                         │
+│               Continue Anyway                          │
+│            (Not Recommended)                           │
+│                                                         │
+│         [✓] Trust this site (Add to whitelist)        │
+│         [⚠️] Report False Positive                     │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Design Specifications**:
+- **Background**: White (`#FFFFFF`)
+- **Icon**: Large red shield (96px × 96px)
+- **Heading**: 32px, bold, red (`#DC2626`)
+- **Body Text**: 16px, gray (`#6B7280`)
+- **URL Display**: Monospace font, light gray background
+- **Primary Button**: Green, large (200px × 50px)
+- **Secondary Link**: Gray text, underlined
+- **Checkboxes**: Standard Chrome checkboxes
+
+#### 6.7.4.6 Warning Banner UI Specification
+
+**In-Page Banner (Medium Risk)**:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ⚠️  This site may be suspicious (Confidence: 72%)        │
+│     Proceed with caution. Avoid entering passwords.      │
+│     [Trust This Site] [Learn More] [×]                   │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Design Specifications**:
+- **Position**: Fixed at top of page (`position: fixed; top: 0;`)
+- **Width**: 100% viewport width
+- **Height**: 60px
+- **Background**: Yellow (`#FEF3C7`)
+- **Border**: Bottom border, orange (`#F59E0B`)
+- **Z-index**: 999999 (above all page content)
+- **Text**: 14px, dark gray (`#78350F`)
+- **Buttons**: Small, inline, subtle styling
+- **Close Button**: Top-right corner (× icon)
+
+**Behavior**:
+- Slides down from top with animation (300ms ease-in-out)
+- Dismissible by clicking (×) button
+- Persists until user action or page navigation
+
+#### 6.7.4.7 Settings Page UI Specification
+
+**Layout**:
+```
+┌─────────────────────────────────────────────────┐
+│ ⚙️ Phishing Detector Settings                   │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│ General Settings                                │
+│ ┌─────────────────────────────────────────────┐│
+│ │ [✓] Enable real-time protection             ││
+│ │ [✓] Show notifications                      ││
+│ │ [ ] Send anonymous usage statistics         ││
+│ └─────────────────────────────────────────────┘│
+│                                                 │
+│ Detection Sensitivity                           │
+│ ┌─────────────────────────────────────────────┐│
+│ │ ( ) Low    (•) Medium    ( ) High           ││
+│ │                                             ││
+│ │ Medium: Balanced protection (recommended)   ││
+│ └─────────────────────────────────────────────┘│
+│                                                 │
+│ Cache Settings                                  │
+│ ┌─────────────────────────────────────────────┐│
+│ │ [✓] Enable cache (faster, less API calls)   ││
+│ │ Cache duration: [24] hours                  ││
+│ │ Cache size: 2.3 MB / 5 MB                   ││
+│ │ [Clear Cache]                               ││
+│ └─────────────────────────────────────────────┘│
+│                                                 │
+│ Advanced Settings                               │
+│ ┌─────────────────────────────────────────────┐│
+│ │ API Endpoint:                               ││
+│ │ [https://api.phishingdetector.com/v1]      ││
+│ │                                             ││
+│ │ Confidence Thresholds:                      ││
+│ │ Block (High Risk): [80]%                    ││
+│ │ Warn (Medium Risk): [60]%                   ││
+│ └─────────────────────────────────────────────┘│
+│                                                 │
+│ [Save Changes]  [Reset to Defaults]            │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+### 6.7.5 API Integration Details
+
+#### 6.7.5.1 API Client Architecture
+
+**File**: `utils/api-client.js`
+
+```javascript
+/**
+ * API Client for backend communication
+ * Handles request formation, error handling, and response parsing
+ */
+
+class PhishingAPIClient {
+    constructor(baseURL = 'https://api.phishingdetector.com/v1') {
+        this.baseURL = baseURL;
+        this.timeout = 5000; // 5 seconds
+    }
+
+    /**
+     * Classify a URL using the backend API
+     * @param {string} url - URL to classify
+     * @returns {Promise<Object>} Classification result
+     */
+    async classifyURL(url) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+        try {
+            const response = await fetch(`${this.baseURL}/predict`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'User-Agent': 'PhishingDetector-Extension/1.0'
+                },
+                body: JSON.stringify({
+                    url: url,
+                    include_features: false
+                }),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            // Handle different status codes
+            if (response.status === 429) {
+                throw new APIRateLimitError('Rate limit exceeded');
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new APIError(
+                    errorData.error?.message || 'API request failed',
+                    response.status
+                );
+            }
+
+            const data = await response.json();
+            return this.parseResponse(data);
+
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw new APITimeoutError('Request timeout');
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Parse API response into standard format
+     */
+    parseResponse(data) {
+        return {
+            url: data.data.url,
+            prediction: data.data.prediction, // 'phishing' or 'legitimate'
+            confidence: data.data.confidence, // 0.0 - 1.0
+            riskLevel: data.data.risk_level,  // 'safe', 'low', 'medium', 'high'
+            timestamp: data.data.timestamp,
+            modelVersion: data.data.model_version
+        };
+    }
+
+    /**
+     * Check API health
+     */
+    async healthCheck() {
+        try {
+            const response = await fetch(`${this.baseURL}/health`, {
+                method: 'GET',
+                timeout: 3000
+            });
+            return response.ok;
+        } catch {
+            return false;
+        }
+    }
+}
+
+// Custom error classes
+class APIError extends Error {
+    constructor(message, statusCode) {
+        super(message);
+        this.name = 'APIError';
+        this.statusCode = statusCode;
+    }
+}
+
+class APITimeoutError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'APITimeoutError';
+    }
+}
+
+class APIRateLimitError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'APIRateLimitError';
+    }
+}
+
+export { PhishingAPIClient, APIError, APITimeoutError, APIRateLimitError };
+```
+
+#### 6.7.5.2 Request Flow with Retry Logic
+
+```javascript
+/**
+ * Make API request with retry logic
+ */
+async function classifyWithRetry(url, maxRetries = 1) {
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const result = await apiClient.classifyURL(url);
+            return result;
+            
+        } catch (error) {
+            lastError = error;
+            
+            // Don't retry on rate limit or client errors
+            if (error instanceof APIRateLimitError || 
+                (error.statusCode && error.statusCode < 500)) {
+                throw error;
+            }
+            
+            // Wait before retry (exponential backoff)
+            if (attempt < maxRetries) {
+                const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s...
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    
+    // All retries failed
+    throw lastError;
+}
+```
+
+#### 6.7.5.3 API Configuration Management
+
+```javascript
+/**
+ * Load API configuration from storage
+ */
+async function getAPIConfig() {
+    const defaults = {
+        endpoint: 'https://api.phishingdetector.com/v1',
+        timeout: 5000,
+        retries: 1
+    };
+    
+    const stored = await chrome.storage.local.get('apiConfig');
+    return { ...defaults, ...stored.apiConfig };
+}
+
+/**
+ * Update API configuration
+ */
+async function updateAPIConfig(config) {
+    await chrome.storage.local.set({ apiConfig: config });
+}
+```
+
+---
+
+### 6.7.6 Error Handling Behavior
+
+#### 6.7.6.1 Error Handling Strategy
+
+| Error Type | User Impact | Extension Behavior | User Message |
+|------------|-------------|-------------------|--------------|
+| **API Unavailable** | Low | Allow navigation, show warning banner | "Protection temporarily unavailable. Proceed with caution." |
+| **Network Timeout** | Low | Allow navigation, log error | "Unable to verify URL. Please check your connection." |
+| **Rate Limit (429)** | Medium | Use cache if available, else allow | "Service busy. Verification skipped for this request." |
+| **Invalid Response** | Low | Allow navigation, log error | "Verification error occurred. Navigation allowed." |
+| **Malformed URL** | None | Skip processing | No message (invalid URLs ignored) |
+| **Storage Error** | Low | Function without cache | "Cache unavailable. Performance may be affected." |
+| **Permission Denied** | High | Warn user, degrade functionality | "Extension permissions required. Please reinstall." |
+
+#### 6.7.6.2 Error Handling Implementation
+
+```javascript
+/**
+ * Central error handler for background script
+ */
+function handleClassificationError(error, url, tabId) {
+    console.error('[Phishing Detector] Error:', error.message, error);
+    
+    // Log to analytics (if enabled)
+    logError(error.name, error.message);
+    
+    // Determine user-facing behavior
+    switch (error.name) {
+        case 'APITimeoutError':
+            showWarningBanner(tabId, {
+                message: 'Unable to verify this site. Connection timeout.',
+                severity: 'warning',
+                action: 'proceed-caution'
+            });
+            allowNavigation(tabId);
+            break;
+            
+        case 'APIRateLimitError':
+            // Check if we have cached result
+            const cached = await checkCache(url);
+            if (cached) {
+                handleCachedResult(cached, tabId);
+            } else {
+                showWarningBanner(tabId, {
+                    message: 'Protection service busy. Verification skipped.',
+                    severity: 'info',
+                    action: 'proceed-caution'
+                });
+                allowNavigation(tabId);
+            }
+            break;
+            
+        case 'APIError':
+            if (error.statusCode >= 500) {
+                // Server error - allow with warning
+                showWarningBanner(tabId, {
+                    message: 'Verification service error. Proceed with caution.',
+                    severity: 'warning'
+                });
+            }
+            allowNavigation(tabId);
+            break;
+            
+        default:
+            // Unknown error - fail open (allow navigation)
+            allowNavigation(tabId);
+            break;
+    }
+}
+
+/**
+ * Error logging for debugging
+ */
+function logError(errorType, message) {
+    const errorLog = {
+        timestamp: new Date().toISOString(),
+        type: errorType,
+        message: message,
+        userAgent: navigator.userAgent
+    };
+    
+    // Store in local storage (up to last 100 errors)
+    chrome.storage.local.get('errorLog', (data) => {
+        const log = data.errorLog || [];
+        log.push(errorLog);
+        if (log.length > 100) log.shift(); // Keep only last 100
+        chrome.storage.local.set({ errorLog: log });
+    });
+}
+```
+
+#### 6.7.6.3 User-Facing Error Messages
+
+**Design Guidelines**:
+- **Clear Language**: Avoid technical jargon
+- **Actionable**: Tell users what to do next
+- **Non-Alarming**: Don't cause panic for minor errors
+- **Consistent Tone**: Professional but friendly
+
+**Examples**:
+
+```javascript
+const ERROR_MESSAGES = {
+    network: {
+        title: 'Connection Issue',
+        message: 'Unable to verify this site due to network problems.',
+        action: 'You can proceed, but be cautious about entering sensitive information.',
+        icon: '⚠️'
+    },
+    
+    timeout: {
+        title: 'Verification Timeout',
+        message: 'The security check took too long to complete.',
+        action: 'The site has been allowed. If you\'re unsure, close this tab.',
+        icon: 'ℹ️'
+    },
+    
+    rateLimit: {
+        title: 'Service Busy',
+        message: 'Too many verification requests at this time.',
+        action: 'Protection temporarily limited. Avoid suspicious sites.',
+        icon: '⏳'
+    },
+    
+    serverError: {
+        title: 'Service Error',
+        message: 'The verification service encountered an error.',
+        action: 'Protection temporarily unavailable. Exercise caution.',
+        icon: '⚠️'
+    },
+    
+    invalidResponse: {
+        title: 'Unexpected Response',
+        message: 'Received invalid data from verification service.',
+        action: 'Site allowed by default. Report this issue if it persists.',
+        icon: '⚠️'
+    }
+};
+```
+
+---
+
+### 6.7.7 Performance Requirements
+
+#### 6.7.7.1 Performance Metrics and Targets
+
+| Metric | Target | Priority | Measurement Method |
+|--------|--------|----------|-------------------|
+| **Navigation Overhead** | <100ms | Critical | Time from event to API call |
+| **Cache Lookup Time** | <5ms | High | Storage retrieval duration |
+| **Popup Load Time** | <100ms | High | Click to visible UI |
+| **Warning Page Load** | <200ms | Medium | Redirect to full display |
+| **Memory Usage (Idle)** | <20MB | Medium | Chrome Task Manager |
+| **Memory Usage (Active)** | <50MB | High | Chrome Task Manager |
+| **CPU Usage (Idle)** | <1% | Medium | Chrome Task Manager |
+| **CPU Usage (Active)** | <5% | Medium | During API calls |
+| **Storage Usage** | <10MB | Low | chrome.storage.local.getBytesInUse() |
+| **API Call Frequency** | <10/min | High | Request counter |
+
+#### 6.7.7.2 Performance Optimization Strategies
+
+**1. Cache Optimization**
+```javascript
+/**
+ * Efficient cache implementation with TTL
+ */
+class URLCache {
+    constructor(ttlHours = 24) {
+        this.ttl = ttlHours * 60 * 60 * 1000; // Convert to milliseconds
+        this.maxSize = 1000; // Maximum cached entries
+    }
+
+    /**
+     * Get cached result with TTL check
+     */
+    async get(url) {
+        const hash = await this.hashURL(url);
+        const data = await chrome.storage.local.get(`cache_${hash}`);
+        
+        if (!data[`cache_${hash}`]) return null;
+        
+        const cached = data[`cache_${hash}`];
+        const age = Date.now() - cached.timestamp;
+        
+        // Check if expired
+        if (age > this.ttl) {
+            await this.remove(url);
+            return null;
+        }
+        
+        return cached.result;
+    }
+
+    /**
+     * Store result in cache
+     */
+    async set(url, result) {
+        const hash = await this.hashURL(url);
+        const entry = {
+            result: result,
+            timestamp: Date.now()
+        };
+        
+        await chrome.storage.local.set({ [`cache_${hash}`]: entry });
+        
+        // Check cache size and cleanup if needed
+        await this.cleanupIfNeeded();
+    }
+
+    /**
+     * Hash URL for privacy (don't store full URLs)
+     */
+    async hashURL(url) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(url);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    /**
+     * Cleanup old entries if cache too large
+     */
+    async cleanupIfNeeded() {
+        const storage = await chrome.storage.local.get(null);
+        const cacheKeys = Object.keys(storage).filter(k => k.startsWith('cache_'));
+        
+        if (cacheKeys.length > this.maxSize) {
+            // Remove oldest 20% of entries
+            const toRemove = Math.floor(cacheKeys.length * 0.2);
+            const entries = await Promise.all(
+                cacheKeys.map(async key => ({
+                    key,
+                    timestamp: storage[key].timestamp
+                }))
+            );
+            
+            entries.sort((a, b) => a.timestamp - b.timestamp);
+            const keysToRemove = entries.slice(0, toRemove).map(e => e.key);
+            
+            await chrome.storage.local.remove(keysToRemove);
+        }
+    }
+}
+```
+
+**2. Debouncing and Throttling**
+```javascript
+/**
+ * Debounce function to limit rapid-fire events
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+/**
+ * Throttle API calls to prevent rate limiting
+ */
+class APIThrottler {
+    constructor(maxCallsPerMinute = 100) {
+        this.maxCalls = maxCallsPerMinute;
+        this.calls = [];
+    }
+
+    async canMakeCall() {
+        const now = Date.now();
+        const oneMinuteAgo = now - 60000;
+        
+        // Remove calls older than 1 minute
+        this.calls = this.calls.filter(time => time > oneMinuteAgo);
+        
+        if (this.calls.length >= this.maxCalls) {
+            return false;
+        }
+        
+        this.calls.push(now);
+        return true;
+    }
+}
+```
+
+**3. Lazy Loading**
+```javascript
+/**
+ * Lazy load non-critical components
+ */
+async function initializeExtension() {
+    // Load critical components immediately
+    await loadCache();
+    await loadWhitelist();
+    await loadSettings();
+    
+    // Defer non-critical loads
+    setTimeout(() => {
+        loadStatistics();
+        cleanupOldLogs();
+    }, 5000);
+}
+```
+
+**4. Efficient DOM Manipulation**
+```javascript
+/**
+ * Inject warning banner efficiently
+ */
+function injectWarningBanner(message, severity) {
+    // Create banner element once
+    const banner = document.createElement('div');
+    banner.id = 'phishing-detector-banner';
+    banner.className = `pd-banner pd-banner-${severity}`;
+    
+    // Use template literal for faster rendering
+    banner.innerHTML = `
+        <div class="pd-banner-content">
+            <span class="pd-icon">${severityIcon(severity)}</span>
+            <span class="pd-message">${escapeHTML(message)}</span>
+            <button class="pd-close" aria-label="Close">×</button>
+        </div>
+    `;
+    
+    // Inject at top of body (single DOM operation)
+    document.body.insertAdjacentElement('afterbegin', banner);
+    
+    // Attach event listener
+    banner.querySelector('.pd-close').addEventListener('click', () => {
+        banner.remove();
+    });
+}
+```
+
+#### 6.7.7.3 Performance Monitoring
+
+```javascript
+/**
+ * Performance monitoring utility
+ */
+class PerformanceMonitor {
+    constructor() {
+        this.metrics = {
+            apiCalls: [],
+            cacheHits: 0,
+            cacheMisses: 0,
+            navigationOverhead: []
+        };
+    }
+
+    /**
+     * Record API call duration
+     */
+    recordAPICall(duration) {
+        this.metrics.apiCalls.push(duration);
+        if (this.metrics.apiCalls.length > 100) {
+            this.metrics.apiCalls.shift();
+        }
+    }
+
+    /**
+     * Record cache performance
+     */
+    recordCacheHit() {
+        this.metrics.cacheHits++;
+    }
+
+    recordCacheMiss() {
+        this.metrics.cacheMisses++;
+    }
+
+    /**
+     * Get performance statistics
+     */
+    getStats() {
+        const avgAPITime = this.metrics.apiCalls.length > 0
+            ? this.metrics.apiCalls.reduce((a, b) => a + b, 0) / this.metrics.apiCalls.length
+            : 0;
+        
+        const cacheHitRate = (this.metrics.cacheHits + this.metrics.cacheMisses) > 0
+            ? (this.metrics.cacheHits / (this.metrics.cacheHits + this.metrics.cacheMisses)) * 100
+            : 0;
+        
+        return {
+            avgAPICallTime: Math.round(avgAPITime),
+            cacheHitRate: Math.round(cacheHitRate),
+            totalAPICalls: this.metrics.apiCalls.length
+        };
+    }
+}
+```
+
+---
+
 ## 7. Functional Requirements
 
 ### 7.1 Chrome Extension Requirements
@@ -3459,12 +8500,6 @@ async def metrics():
 - Developer: [Your Name]
 - Email: [Your Email]
 - GitHub: [Your GitHub Profile]
-
-**Supervisor**:
-- Name: [Supervisor Name]
-- Department: [Department]
-- Email: [Supervisor Email]
-
 ---
 
 **Document Change Log**:
